@@ -255,6 +255,15 @@ describe('Onboarding', () => {
     expect(onFinish).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps the title area at a fixed minimum height across slides with descriptions of different line counts, so the title does not visibly shift position (正常系: タイトル位置の安定化)', () => {
+    render(<Onboarding visible={true} onFinish={jest.fn()} />);
+
+    const title = screen.getByText(ONBOARDING_SLIDES[0].title);
+    const titleArea = title.parent?.parent?.parent;
+    expect(titleArea).toBeTruthy();
+    expect(StyleSheet.flatten(titleArea!.props.style).minHeight).toBe(72);
+  });
+
   it('calls onFinish when the modal requests to close (e.g. Android hardware back button) (境界値: OS操作による閉じる)', () => {
     const onFinish = jest.fn();
     render(<Onboarding visible={true} onFinish={onFinish} />);

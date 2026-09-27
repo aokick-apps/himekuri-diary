@@ -2565,6 +2565,32 @@ describe('HomeScreen', () => {
       });
     });
 
+    it('shows a hint explaining that dimly displayed months have no diary entries and cannot be selected (正常系: 選択不可月の理由表示)', async () => {
+      const now = new Date();
+      render(<HomeScreen />);
+      await waitForInitialLoad();
+
+      await openMonthPicker(now);
+
+      expect(
+        screen.getByText('薄く表示されている月は日記が無い期間のため選択できません'),
+      ).toBeTruthy();
+    });
+
+    it('adds the same bottom padding as the modal content to the month grid contentContainerStyle, so the last row is not hidden behind the tab bar when scrolled to the end (境界値: スクロール終端)', async () => {
+      const now = new Date();
+      render(<HomeScreen />);
+      await waitForInitialLoad();
+
+      await openMonthPicker(now);
+
+      const monthScroll = screen.getByTestId('month-picker-scroll');
+      const [modalContent] = getMonthPickerModal().findAllByType(ThemedView);
+      expect(StyleSheet.flatten(monthScroll.props.contentContainerStyle).paddingBottom).toBe(
+        StyleSheet.flatten(modalContent.props.style).paddingBottom,
+      );
+    });
+
     describe('モーダルの高さ上限(画面高さ基準)', () => {
       const originalWindow = Dimensions.get('window');
 
@@ -3794,6 +3820,29 @@ describe('HomeScreen', () => {
       // entriesByDateはcreatedAtの日付(=タップした日付)をキーにするため、
       // 対象日のカレンダーセルに日記件数インジケーターとして反映される
       expect(queryCalendarDayButtonsWithEntry()).toHaveLength(1);
+    });
+
+    it('shows the shared success toast and triggers a success haptic notification after saving from the date-specific new-entry modal, matching the top composer feedback (正常系)', async () => {
+      const now = new Date();
+      const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+
+      render(<HomeScreen />);
+      await waitForInitialLoad();
+      jest.clearAllMocks();
+
+      openNewEntryModalFor(yesterday);
+      fireEvent.changeText(getNewEntryInput(), '日付指定モーダルの保存フィードバック確認');
+      fireEvent.press(getNewEntrySaveButton());
+
+      await waitFor(() => expect(AsyncStorage.setItem).toHaveBeenCalledTimes(1));
+
+      expect(await screen.findByText('保存しました')).toBeTruthy();
+      expect(screen.getByTestId('save-toast')).toBeTruthy();
+      await waitFor(() =>
+        expect(mockNotificationAsync).toHaveBeenCalledWith(
+          Haptics.NotificationFeedbackType.Success,
+        ),
+      );
     });
 
     it('uses the save-moment time-of-day (not a fixed noon) for createdAt on each save, so consecutive saves at different times produce different createdAt values (境界値)', async () => {

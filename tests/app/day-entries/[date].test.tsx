@@ -1,11 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import * as Clipboard from 'expo-clipboard';
+import * as Haptics from 'expo-haptics';
 import * as SecureStore from 'expo-secure-store';
 import React from 'react';
 import { Alert, Dimensions, StyleSheet, useColorScheme } from 'react-native';
 
 import DayEntriesScreen from '@/app/day-entries/[date]';
+import { SAVE_SUCCESS_MESSAGE } from '@/constants/diary-messages';
 import { Colors } from '@/constants/theme';
 import { useSaveDiaryEntry } from '@/hooks/use-save-diary-entry';
 import {
@@ -30,6 +32,13 @@ import { BODY_MAX_LENGTH } from '@/utils/diary-text';
 // reject時の異常系テストが行えないため、明示的なモックへ差し替える(tests/app/index.test.tsxと同様)。
 jest.mock('expo-clipboard', () => ({
   setStringAsync: jest.fn(() => Promise.resolve(true)),
+}));
+
+// expo-hapticsは、保存成功時のハプティックフィードバックを呼び出し引数まで明示的にアサート
+// できるよう、jest-expoのオートモックではなく独自モックに差し替える(tests/app/index.test.tsxと同様)。
+jest.mock('expo-haptics', () => ({
+  notificationAsync: jest.fn(() => Promise.resolve()),
+  NotificationFeedbackType: { Success: 'success' },
 }));
 
 // ネイティブの`AsyncStorage`はJest環境では利用できないため、公式のインメモリモックに差し替える
@@ -142,6 +151,7 @@ jest.mock('expo-router', () => {
 });
 
 const mockSetStringAsync = Clipboard.setStringAsync as jest.Mock;
+const mockNotificationAsync = Haptics.notificationAsync as jest.Mock;
 const {
   __triggerRefocus: triggerRefocus,
   __mockPush: mockPush,
@@ -1345,6 +1355,27 @@ describe('DayEntriesScreen', () => {
       expect(screen.getAllByText('連打される日記')).toHaveLength(1);
     }, 15000); // waitForのtimeout(5000ms)にマージンを持たせ、CI環境の負荷によるflaky失敗を防ぐ
 
+    it('shows the shared success toast and triggers a success haptic notification after saving a new entry from this modal, matching the home screen feedback (正常系)', async () => {
+      render(<DayEntriesScreen />);
+      await waitFor(() => expect(mockSetOptions).toHaveBeenCalled());
+      await openNewEntryComposer();
+
+      fireEvent.changeText(
+        screen.getByLabelText(NEW_ENTRY_INPUT_LABEL),
+        '保存成功フィードバック確認用',
+      );
+      fireEvent.press(screen.getByText(NEW_ENTRY_SAVE_LABEL));
+
+      const toast = await screen.findByTestId('save-toast');
+      expect(toast).toBeTruthy();
+      expect(screen.getByText(SAVE_SUCCESS_MESSAGE)).toBeTruthy();
+      await waitFor(() =>
+        expect(mockNotificationAsync).toHaveBeenCalledWith(
+          Haptics.NotificationFeedbackType.Success,
+        ),
+      );
+    });
+
     it('shows an error message and rolls back the optimistic list update when persisting fails, keeping the modal open with the input preserved (異常系)', async () => {
       jest.spyOn(AsyncStorage, 'setItem').mockRejectedValueOnce(new Error('write failed'));
 
@@ -1362,6 +1393,9 @@ describe('DayEntriesScreen', () => {
       // モーダルは開いたままで、入力内容も保持されている
       expect(screen.getByText(NEW_ENTRY_HEADING)).toBeTruthy();
       expect(screen.getByLabelText(NEW_ENTRY_INPUT_LABEL).props.value).toBe('保存失敗する日記');
+      // 保存に失敗した場合は成功トーストを出さない
+      expect(screen.queryByTestId('save-toast')).toBeNull();
+      expect(mockNotificationAsync).not.toHaveBeenCalled();
     });
 
     it('passes an isMountedRef to useSaveDiaryEntry.save whose current becomes false after unmounting while a save is still in flight (isMountedRefガードの配線確認)', async () => {

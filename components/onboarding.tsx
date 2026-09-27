@@ -9,6 +9,9 @@ import { useThemeColor } from '@/hooks/use-theme-color';
 
 const CONTENT_PADDING = 24;
 const HEADER_TOP_OFFSET = 16;
+// ヘッダー(戻る/スキップ)は絶対配置でbodyの上端に近い位置に重なるため、
+// titleAreaの開始位置をヘッダーの下端より下まで離してテキストの重なりを防ぐ
+const TITLE_AREA_TOP_SPACING = 32;
 
 type OnboardingProps = {
   visible: boolean;
@@ -175,6 +178,7 @@ const styles = StyleSheet.create({
   },
   titleArea: {
     minHeight: 72,
+    paddingTop: TITLE_AREA_TOP_SPACING,
     justifyContent: 'center',
   },
   title: {

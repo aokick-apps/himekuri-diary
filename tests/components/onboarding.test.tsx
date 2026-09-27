@@ -264,6 +264,17 @@ describe('Onboarding', () => {
     expect(StyleSheet.flatten(titleArea!.props.style).minHeight).toBe(72);
   });
 
+  it('keeps the title area away from the header by a fixed top spacing so a two-line title does not overlap the header actions (回帰防止: ヘッダーとの重なり)', () => {
+    render(<Onboarding visible={true} onFinish={jest.fn()} />);
+
+    const title = screen.getByText(ONBOARDING_SLIDES[0].title);
+    const titleArea = title.parent?.parent?.parent;
+    const titleAreaStyle = StyleSheet.flatten(titleArea!.props.style);
+
+    // ヘッダーの行の高さ(24px相当)を上回る余白を確保し、2行タイトルでも重ならないようにする
+    expect(titleAreaStyle.paddingTop).toBeGreaterThan(24);
+  });
+
   it('calls onFinish when the modal requests to close (e.g. Android hardware back button) (境界値: OS操作による閉じる)', () => {
     const onFinish = jest.fn();
     render(<Onboarding visible={true} onFinish={onFinish} />);

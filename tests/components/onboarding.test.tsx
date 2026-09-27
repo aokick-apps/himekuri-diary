@@ -273,6 +273,25 @@ describe('Onboarding', () => {
 
     // ヘッダーの行の高さ(24px相当)を上回る余白を確保し、2行タイトルでも重ならないようにする
     expect(titleAreaStyle.paddingTop).toBeGreaterThan(24);
+    expect(titleAreaStyle.paddingTop).toBe(32);
+  });
+
+  it('keeps both the fixed minimum height and the header-clearing top spacing unchanged when moving to a slide with a longer title (正常系・回帰防止: スライド間でのタイトル位置安定とヘッダー重なり防止の両立)', () => {
+    render(<Onboarding visible={true} onFinish={jest.fn()} />);
+
+    for (let i = 0; i < ONBOARDING_SLIDES.length - 1; i += 1) {
+      fireEvent.press(screen.getByText('次へ'));
+    }
+
+    const lastSlide = ONBOARDING_SLIDES[ONBOARDING_SLIDES.length - 1];
+    const title = screen.getByText(lastSlide.title);
+    const titleArea = title.parent?.parent?.parent;
+    const titleAreaStyle = StyleSheet.flatten(titleArea!.props.style);
+
+    // スライドが変わってタイトル文言の長さが変わっても、位置安定化とヘッダー重なり防止の
+    // 両方の余白設定が同じ値のまま維持されることを確認する
+    expect(titleAreaStyle.minHeight).toBe(72);
+    expect(titleAreaStyle.paddingTop).toBe(32);
   });
 
   it('calls onFinish when the modal requests to close (e.g. Android hardware back button) (境界値: OS操作による閉じる)', () => {

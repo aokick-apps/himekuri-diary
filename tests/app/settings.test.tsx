@@ -1846,8 +1846,7 @@ describe('リマインダーセクション(日記を書く習慣化のための
   const MINUTE_INCREASE_LABEL = '分を増やす';
   const FALLBACK_TEXT =
     '通知が許可されていないため、リマインダーを利用できません。端末の設定からこのアプリの通知を許可してください。';
-  const OFF_HINT_TEXT =
-    'リマインダーがOFFのため通知は届きません。ここで設定した時刻は、ONにしたときの通知時刻になります。';
+  const OFF_HINT_TEXT = 'リマインダーをONにすると、この時刻に通知します。';
 
   // `useDiaryReminder()`は`Provider`配下でない場合`setEnabled`/`setTime`がno-opにフォールバックする
   // 仕様(tests/contexts/diary-reminder-context.test.tsx参照)のため、実機と同じ構成を再現するために
@@ -1889,7 +1888,37 @@ describe('リマインダーセクション(日記を書く習慣化のための
     expect(screen.getByText('00')).toBeTruthy();
 
     // 初期化の非同期更新が完了した合図(OFF時の案内文の表示)まで待ってから終える
-    await screen.findByText(/リマインダーがOFFのため通知は届きません/);
+    await screen.findByText(OFF_HINT_TEXT);
+  });
+
+  it('shows the shortened toggle row label text next to the switch (正常系: 折り返し対策後の文言)', async () => {
+    renderSettingsScreen();
+
+    expect(screen.getByText('毎日決まった時刻に通知する')).toBeTruthy();
+    await screen.findByText(OFF_HINT_TEXT);
+  });
+
+  it('groups the hour stepper, colon separator, and minute stepper into a single row container, so the colon does not become isolated at a line-wrap boundary (境界値: レイアウト折り返し対策)', async () => {
+    renderSettingsScreen();
+    await screen.findByText(OFF_HINT_TEXT);
+
+    const separator = screen.getByText(':');
+    // ThemedText(合成コンポーネント)を2階層挟むため、実体のView(ThemedViewのホスト要素)は
+    // 3階層上の祖先になる
+    const group = separator.parent?.parent?.parent;
+    expect(group).toBeTruthy();
+    expect(StyleSheet.flatten(group!.props.style).flexDirection).toBe('row');
+    expect(within(group!).getByLabelText(HOUR_DECREASE_LABEL)).toBeTruthy();
+    expect(within(group!).getByLabelText(HOUR_INCREASE_LABEL)).toBeTruthy();
+    expect(within(group!).getByLabelText(MINUTE_DECREASE_LABEL)).toBeTruthy();
+    expect(within(group!).getByLabelText(MINUTE_INCREASE_LABEL)).toBeTruthy();
+  });
+
+  it('tightens the OFF hint text lineHeight so it does not look overly spaced at its small font size (境界値: 行間調整)', async () => {
+    renderSettingsScreen();
+
+    const hint = await screen.findByText(OFF_HINT_TEXT);
+    expect(StyleSheet.flatten(hint.props.style).lineHeight).toBe(18);
   });
 
   it('requests OS permission, turns ON, and schedules the reminder when the toggle is pressed while permission is undetermined and the user grants it (正常系: 未確認から許可)', async () => {

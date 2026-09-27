@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import * as Haptics from 'expo-haptics';
 import * as SecureStore from 'expo-secure-store';
 import React from 'react';
 import { Alert, StyleSheet } from 'react-native';
@@ -25,6 +26,13 @@ jest.mock('react-native-safe-area-context', () => {
     useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: mockSafeAreaBottom, left: 0 }),
   };
 });
+
+// expo-hapticsは、保存成功時のハプティックフィードバックを呼び出し引数まで明示的にアサート
+// できるよう、jest-expoのオートモックではなく独自モックに差し替える(tests/app/index.test.tsxと同様)。
+jest.mock('expo-haptics', () => ({
+  notificationAsync: jest.fn(() => Promise.resolve()),
+  NotificationFeedbackType: { Success: 'success' },
+}));
 
 // jest-expoのオートモックは`getRandomBytes`を提供しないため、Node標準の`crypto`モジュールで代替する
 // (tests/utils/diary-storage.test.tsと同じ方式)。
@@ -136,6 +144,7 @@ const {
 };
 
 const secureStoreMock = SecureStore as unknown as { __reset: () => void };
+const mockNotificationAsync = Haptics.notificationAsync as jest.Mock;
 
 const ENTRY_ID = 'entry-1';
 
@@ -513,6 +522,17 @@ describe('EditEntryScreen', () => {
       } finally {
         jest.useRealTimers();
       }
+    });
+
+    it('triggers a success haptic notification (Haptics.notificationAsync), matching the home screen and day-entries feedback (正常系)', async () => {
+      await renderAndPressSave('ハプティック確認前の日記', 'ハプティック確認後の日記');
+
+      await screen.findByTestId('save-toast');
+      await waitFor(() =>
+        expect(mockNotificationAsync).toHaveBeenCalledWith(
+          Haptics.NotificationFeedbackType.Success,
+        ),
+      );
     });
 
     it('keeps the save button disabled and ignores extra presses while waiting to navigate back (連打)', async () => {

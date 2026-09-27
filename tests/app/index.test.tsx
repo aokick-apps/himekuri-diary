@@ -2565,6 +2565,32 @@ describe('HomeScreen', () => {
       });
     });
 
+    it('shows a hint explaining that dimly displayed months have no diary entries and cannot be selected (正常系: 選択不可月の理由表示)', async () => {
+      const now = new Date();
+      render(<HomeScreen />);
+      await waitForInitialLoad();
+
+      await openMonthPicker(now);
+
+      expect(
+        screen.getByText('薄く表示されている月は日記が無い期間のため選択できません'),
+      ).toBeTruthy();
+    });
+
+    it('adds the same bottom padding as the modal content to the month grid contentContainerStyle, so the last row is not hidden behind the tab bar when scrolled to the end (境界値: スクロール終端)', async () => {
+      const now = new Date();
+      render(<HomeScreen />);
+      await waitForInitialLoad();
+
+      await openMonthPicker(now);
+
+      const monthScroll = screen.getByTestId('month-picker-scroll');
+      const [modalContent] = getMonthPickerModal().findAllByType(ThemedView);
+      expect(StyleSheet.flatten(monthScroll.props.contentContainerStyle).paddingBottom).toBe(
+        StyleSheet.flatten(modalContent.props.style).paddingBottom,
+      );
+    });
+
     describe('モーダルの高さ上限(画面高さ基準)', () => {
       const originalWindow = Dimensions.get('window');
 
@@ -2712,7 +2738,7 @@ describe('HomeScreen', () => {
       const nextMonth = now.getMonth() + 2;
       if (nextMonth <= 12) {
         const [futureMonthButton] = screen.UNSAFE_getAllByProps({
-          accessibilityLabel: `${now.getFullYear()}年${nextMonth}月へ移動`,
+          accessibilityLabel: `${now.getFullYear()}年${nextMonth}月(日記が無いため選択できません)`,
         });
         expect(futureMonthButton.props.accessibilityState?.disabled).toBe(true);
 
@@ -2956,8 +2982,9 @@ describe('HomeScreen', () => {
       const currentMonthButton = screen.getByLabelText(currentMonthLabel);
       expect(currentMonthButton.props.accessibilityState?.selected).toBe(true);
 
+      // 日記が無いため、当月以外は選択不可(disabled)ラベルになる
       const otherMonthIndex = (now.getMonth() + 6) % 12;
-      const otherMonthLabel = `${now.getFullYear()}年${MONTH_NAMES_JA[otherMonthIndex]}へ移動`;
+      const otherMonthLabel = `${now.getFullYear()}年${MONTH_NAMES_JA[otherMonthIndex]}(日記が無いため選択できません)`;
       const otherMonthButton = screen.getByLabelText(otherMonthLabel);
       expect(otherMonthButton.props.accessibilityState?.selected).toBe(false);
     });
@@ -3017,7 +3044,9 @@ describe('HomeScreen', () => {
       const prevYearButton = screen.getByLabelText('前の年');
       expect(prevYearButton.props.accessibilityState?.disabled).toBe(true);
 
-      const beforeMinMonthButton = screen.getByLabelText(`${minYear}年${minMonth - 1}月へ移動`);
+      const beforeMinMonthButton = screen.getByLabelText(
+        `${minYear}年${minMonth - 1}月(日記が無いため選択できません)`,
+      );
       expect(beforeMinMonthButton.props.accessibilityState?.disabled).toBe(true);
 
       const minMonthButton = screen.getByLabelText(`${minYear}年${minMonth}月へ移動`);
@@ -3791,6 +3820,29 @@ describe('HomeScreen', () => {
       // entriesByDateはcreatedAtの日付(=タップした日付)をキーにするため、
       // 対象日のカレンダーセルに日記件数インジケーターとして反映される
       expect(queryCalendarDayButtonsWithEntry()).toHaveLength(1);
+    });
+
+    it('shows the shared success toast and triggers a success haptic notification after saving from the date-specific new-entry modal, matching the top composer feedback (正常系)', async () => {
+      const now = new Date();
+      const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+
+      render(<HomeScreen />);
+      await waitForInitialLoad();
+      jest.clearAllMocks();
+
+      openNewEntryModalFor(yesterday);
+      fireEvent.changeText(getNewEntryInput(), '日付指定モーダルの保存フィードバック確認');
+      fireEvent.press(getNewEntrySaveButton());
+
+      await waitFor(() => expect(AsyncStorage.setItem).toHaveBeenCalledTimes(1));
+
+      expect(await screen.findByText('保存しました')).toBeTruthy();
+      expect(screen.getByTestId('save-toast')).toBeTruthy();
+      await waitFor(() =>
+        expect(mockNotificationAsync).toHaveBeenCalledWith(
+          Haptics.NotificationFeedbackType.Success,
+        ),
+      );
     });
 
     it('uses the save-moment time-of-day (not a fixed noon) for createdAt on each save, so consecutive saves at different times produce different createdAt values (境界値)', async () => {

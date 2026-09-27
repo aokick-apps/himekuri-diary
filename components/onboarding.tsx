@@ -9,6 +9,9 @@ import { useThemeColor } from '@/hooks/use-theme-color';
 
 const CONTENT_PADDING = 24;
 const HEADER_TOP_OFFSET = 16;
+// ヘッダー(戻る/スキップ)は絶対配置でbodyの上端に近い位置に重なるため、
+// titleAreaの開始位置をヘッダーの下端より下まで離してテキストの重なりを防ぐ
+const TITLE_AREA_TOP_SPACING = 32;
 
 type OnboardingProps = {
   visible: boolean;
@@ -97,10 +100,16 @@ export function Onboarding({ visible, onFinish }: OnboardingProps) {
         </View>
 
         <View style={styles.body}>
-          <ThemedText type="title" style={styles.title}>
-            {currentSlide.title}
-          </ThemedText>
-          <ThemedText style={styles.description}>{currentSlide.description}</ThemedText>
+          {/* 本文の行数がスライドごとに異なっても、タイトルの表示位置が上下しないよう
+              タイトル用の領域を固定高さにして本文とは独立に中央揃えする */}
+          <View style={styles.titleArea}>
+            <ThemedText type="title" style={styles.title}>
+              {currentSlide.title}
+            </ThemedText>
+          </View>
+          <View style={styles.descriptionArea}>
+            <ThemedText style={styles.description}>{currentSlide.description}</ThemedText>
+          </View>
         </View>
 
         <View style={styles.pagination}>
@@ -167,8 +176,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 16,
   },
+  titleArea: {
+    minHeight: 72,
+    paddingTop: TITLE_AREA_TOP_SPACING,
+    justifyContent: 'center',
+  },
   title: {
     textAlign: 'center',
+  },
+  descriptionArea: {
+    flex: 1,
+    justifyContent: 'center',
   },
   description: {
     textAlign: 'center',

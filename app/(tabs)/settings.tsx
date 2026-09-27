@@ -302,9 +302,7 @@ function DiaryReminderSection() {
         リマインダー
       </ThemedText>
       <ThemedView style={styles.reminderToggleRow}>
-        <ThemedText style={styles.reminderToggleLabel}>
-          毎日決まった時刻に日記を書くお知らせをする
-        </ThemedText>
+        <ThemedText style={styles.reminderToggleLabel}>毎日決まった時刻に通知する</ThemedText>
         <Switch
           value={enabled}
           onValueChange={handleToggle}
@@ -314,21 +312,24 @@ function DiaryReminderSection() {
       </ThemedView>
       <ThemedView style={styles.reminderTimeRow}>
         <ThemedText style={styles.reminderTimeRowLabel}>通知時刻</ThemedText>
-        <TimeStepper
-          label="時"
-          value={hour}
-          onDecrease={() => handleHourChange(-1)}
-          onIncrease={() => handleHourChange(1)}
-          disabled={isTogglePending || isTimePending || permissionStatus === 'denied'}
-        />
-        <ThemedText style={styles.reminderTimeSeparator}>:</ThemedText>
-        <TimeStepper
-          label="分"
-          value={minute}
-          onDecrease={() => handleMinuteChange(-REMINDER_MINUTE_STEP)}
-          onIncrease={() => handleMinuteChange(REMINDER_MINUTE_STEP)}
-          disabled={isTogglePending || isTimePending || permissionStatus === 'denied'}
-        />
+        {/* 「時」「:」「分」を1つの折り返し単位にまとめ、コロンだけが行末に孤立しないようにする */}
+        <ThemedView style={styles.reminderTimeControls}>
+          <TimeStepper
+            label="時"
+            value={hour}
+            onDecrease={() => handleHourChange(-1)}
+            onIncrease={() => handleHourChange(1)}
+            disabled={isTogglePending || isTimePending || permissionStatus === 'denied'}
+          />
+          <ThemedText style={styles.reminderTimeSeparator}>:</ThemedText>
+          <TimeStepper
+            label="分"
+            value={minute}
+            onDecrease={() => handleMinuteChange(-REMINDER_MINUTE_STEP)}
+            onIncrease={() => handleMinuteChange(REMINDER_MINUTE_STEP)}
+            disabled={isTogglePending || isTimePending || permissionStatus === 'denied'}
+          />
+        </ThemedView>
       </ThemedView>
       {permissionStatus === 'denied' && (
         <ThemedText style={[styles.reminderFallbackText, { color: errorColor }]}>
@@ -336,9 +337,9 @@ function DiaryReminderSection() {
         </ThemedText>
       )}
       {isLoaded && !enabled && permissionStatus !== 'denied' && (
-        // OFFのうちに時刻を決めてからONにできるよう操作は無効化せず、通知に反映されない旨だけ案内する
+        // OFFのうちに時刻を決めてからONにできるよう操作は無効化せず、通知に反映される時刻だけ前向きに案内する
         <ThemedText style={styles.reminderHintText}>
-          リマインダーがOFFのため通知は届きません。ここで設定した時刻は、ONにしたときの通知時刻になります。
+          リマインダーをONにすると、この時刻に通知します。
         </ThemedText>
       )}
     </ThemedView>
@@ -782,6 +783,11 @@ const styles = StyleSheet.create({
   reminderTimeRowLabel: {
     marginRight: 4,
   },
+  reminderTimeControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   reminderTimeSeparator: {
     fontWeight: '600',
   },
@@ -815,6 +821,8 @@ const styles = StyleSheet.create({
   reminderHintText: {
     marginTop: 12,
     fontSize: 13,
+    // ThemedTextの既定lineHeight(24)だとこの文字サイズには間延びするため個別に詰める
+    lineHeight: 18,
   },
   exportButton: {
     alignSelf: 'flex-start',

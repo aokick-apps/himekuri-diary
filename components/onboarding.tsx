@@ -97,10 +97,16 @@ export function Onboarding({ visible, onFinish }: OnboardingProps) {
         </View>
 
         <View style={styles.body}>
-          <ThemedText type="title" style={styles.title}>
-            {currentSlide.title}
-          </ThemedText>
-          <ThemedText style={styles.description}>{currentSlide.description}</ThemedText>
+          {/* 本文の行数がスライドごとに異なっても、タイトルの表示位置が上下しないよう
+              タイトル用の領域を固定高さにして本文とは独立に中央揃えする */}
+          <View style={styles.titleArea}>
+            <ThemedText type="title" style={styles.title}>
+              {currentSlide.title}
+            </ThemedText>
+          </View>
+          <View style={styles.descriptionArea}>
+            <ThemedText style={styles.description}>{currentSlide.description}</ThemedText>
+          </View>
         </View>
 
         <View style={styles.pagination}>
@@ -167,8 +173,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 16,
   },
+  titleArea: {
+    minHeight: 72,
+    justifyContent: 'center',
+  },
   title: {
     textAlign: 'center',
+  },
+  descriptionArea: {
+    flex: 1,
+    justifyContent: 'center',
   },
   description: {
     textAlign: 'center',

@@ -2712,7 +2712,7 @@ describe('HomeScreen', () => {
       const nextMonth = now.getMonth() + 2;
       if (nextMonth <= 12) {
         const [futureMonthButton] = screen.UNSAFE_getAllByProps({
-          accessibilityLabel: `${now.getFullYear()}年${nextMonth}月へ移動`,
+          accessibilityLabel: `${now.getFullYear()}年${nextMonth}月(日記が無いため選択できません)`,
         });
         expect(futureMonthButton.props.accessibilityState?.disabled).toBe(true);
 
@@ -2956,8 +2956,9 @@ describe('HomeScreen', () => {
       const currentMonthButton = screen.getByLabelText(currentMonthLabel);
       expect(currentMonthButton.props.accessibilityState?.selected).toBe(true);
 
+      // 日記が無いため、当月以外は選択不可(disabled)ラベルになる
       const otherMonthIndex = (now.getMonth() + 6) % 12;
-      const otherMonthLabel = `${now.getFullYear()}年${MONTH_NAMES_JA[otherMonthIndex]}へ移動`;
+      const otherMonthLabel = `${now.getFullYear()}年${MONTH_NAMES_JA[otherMonthIndex]}(日記が無いため選択できません)`;
       const otherMonthButton = screen.getByLabelText(otherMonthLabel);
       expect(otherMonthButton.props.accessibilityState?.selected).toBe(false);
     });
@@ -3017,7 +3018,9 @@ describe('HomeScreen', () => {
       const prevYearButton = screen.getByLabelText('前の年');
       expect(prevYearButton.props.accessibilityState?.disabled).toBe(true);
 
-      const beforeMinMonthButton = screen.getByLabelText(`${minYear}年${minMonth - 1}月へ移動`);
+      const beforeMinMonthButton = screen.getByLabelText(
+        `${minYear}年${minMonth - 1}月(日記が無いため選択できません)`,
+      );
       expect(beforeMinMonthButton.props.accessibilityState?.disabled).toBe(true);
 
       const minMonthButton = screen.getByLabelText(`${minYear}年${minMonth}月へ移動`);

@@ -1,5 +1,6 @@
 import * as Clipboard from 'expo-clipboard';
 import { randomUUID } from 'expo-crypto';
+import * as Haptics from 'expo-haptics';
 import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, FlatList, Pressable, StyleSheet, View } from 'react-native';
@@ -10,6 +11,7 @@ import { SaveToast } from '@/components/save-toast';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { SAVE_SUCCESS_MESSAGE } from '@/constants/diary-messages';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import {
   buildCreatedAtForDateKeyAtTime,
@@ -49,6 +51,7 @@ export default function DayEntriesScreen() {
   const [hasLoadedEntries, setHasLoadedEntries] = useState(false);
   const [hasLoadError, setHasLoadError] = useState(false);
   const [copyToastMessage, setCopyToastMessage] = useState<string | null>(null);
+  const [saveToastMessage, setSaveToastMessage] = useState<string | null>(null);
   const [corruptionToastMessage, setCorruptionToastMessage] = useState<string | null>(null);
   const [pendingDeletedEntries, setPendingDeletedEntries] = useState<DiaryEntry[]>([]);
   const [isRestoringDeletedEntries, setIsRestoringDeletedEntries] = useState(false);
@@ -179,12 +182,21 @@ export default function DayEntriesScreen() {
     [date],
   );
 
+  // ホーム画面の保存成功時と同じトースト・ハプティクスでフィードバックを揃える
   const handleComposerSaved = useCallback(() => {
     setIsComposerOpen(false);
+    setSaveToastMessage(SAVE_SUCCESS_MESSAGE);
+    if (process.env.EXPO_OS === 'ios') {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
   }, []);
 
   const handleHideCopyToast = useCallback(() => {
     setCopyToastMessage(null);
+  }, []);
+
+  const handleHideSaveToast = useCallback(() => {
+    setSaveToastMessage(null);
   }, []);
 
   const handleHideCorruptionToast = useCallback(() => {
@@ -347,6 +359,9 @@ export default function DayEntriesScreen() {
     <ThemedView style={styles.container}>
       {copyToastMessage ? (
         <SaveToast message={copyToastMessage} onHide={handleHideCopyToast} testID="copy-toast" />
+      ) : null}
+      {saveToastMessage ? (
+        <SaveToast message={saveToastMessage} onHide={handleHideSaveToast} testID="save-toast" />
       ) : null}
       {corruptionToastMessage ? (
         <SaveToast

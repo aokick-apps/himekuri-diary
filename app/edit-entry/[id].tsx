@@ -1,4 +1,5 @@
 import type { NavigationAction } from '@react-navigation/native';
+import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -16,14 +17,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SaveToast } from '@/components/save-toast';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
+import { SAVE_SUCCESS_MESSAGE } from '@/constants/diary-messages';
 import { useDraftAutoSave } from '@/hooks/use-draft-auto-save';
 import { useSaveDiaryEntry } from '@/hooks/use-save-diary-entry';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { DIARY_EDIT_DRAFT_STORAGE_KEY_PREFIX, loadDraftText } from '@/utils/diary-draft-storage';
 import { BODY_MAX_LENGTH, splitIntoGraphemes, truncateToBodyMaxLength } from '@/utils/diary-text';
 import { getDiaryEntryById, saveDiaryEntry, type DiaryEntry } from '@/utils/diary-storage';
-
-const SAVE_SUCCESS_MESSAGE = '保存しました';
 
 // 保存成功のトーストを表示してから前の画面へ戻るまでの待ち時間(ミリ秒)。
 // 遷移が早すぎると保存できたかを確認できないため、トーストを読める長さだけ画面に留める
@@ -171,6 +171,10 @@ export default function EditEntryScreen() {
         // 待機中も保存処理中(isSavingEdit)のままにすることで、保存ボタンの再押下と本文入力を防ぎ、
         // 戻る操作はbeforeRemoveでブロックされて待機完了後に再送される
         setSaveToastMessage(SAVE_SUCCESS_MESSAGE);
+        // ホーム画面の保存成功時と同じ触覚フィードバックで一貫させる
+        if (process.env.EXPO_OS === 'ios') {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }
         await new Promise<void>((resolve) => {
           const timer = setTimeout(resolve, NAVIGATE_BACK_DELAY_AFTER_SAVE_MS);
           cancelNavigateBackDelayRef.current = () => {

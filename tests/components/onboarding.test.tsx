@@ -164,14 +164,14 @@ describe('Onboarding', () => {
     expect(slide?.description).toContain('日記」タブ');
   });
 
-  it('introduces reminders, app lock, and export/import on the settings slide (正常系: 設定スライドの内容確認)', () => {
+  it('introduces reminders, app lock, and backup/restore on the settings slide (正常系: 設定スライドの内容確認)', () => {
     const slide = ONBOARDING_SLIDES.find((item) => item.key === 'settings');
 
     expect(slide).toBeDefined();
     expect(slide?.description).toContain('リマインダー');
     expect(slide?.description).toContain('アプリロック');
-    expect(slide?.description).toContain('エクスポート');
-    expect(slide?.description).toContain('インポート');
+    expect(slide?.description).toContain('バックアップ');
+    expect(slide?.description).toContain('復元');
   });
 
   it('keeps slide keys unique so pagination dots render with stable keys (境界値: キーの一意性)', () => {

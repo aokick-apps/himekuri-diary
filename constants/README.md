@@ -6,15 +6,20 @@
 
 ```
 constants/
+  diary-messages.ts      日記の保存関連でユーザーに表示する文言(保存成功トーストなど)の定義
   onboarding-slides.ts   初回起動時のオンボーディングで案内するスライドの定義
   settings-menu.ts       設定画面のメニュー項目(法的情報・サポートなど)の定義
   theme.ts               ライト/ダークモードのカラーパレットとフォント設定
 ```
 
+## `diary-messages.ts` の構成
+
+- `SAVE_SUCCESS_MESSAGE`: 日記の保存に成功した際のトーストメッセージです。ホーム画面([`app/(tabs)/index.tsx`](<../app/(tabs)/index.tsx>))・日別一覧画面(`app/day-entries/[date].tsx`)・編集画面(`app/edit-entry/[id].tsx`)の複数の保存導線で文言がぶれないよう共通化しています。
+
 ## `onboarding-slides.ts` の構成
 
 - `OnboardingSlide`: スライド1枚分の型(`key` / `title` / `description`)です。
-- `ONBOARDING_SLIDES`: 初回起動時のオンボーディングで案内するスライドの配列です(日記を書く・カレンダーで一覧を見る・設定でデータを管理、の3枚)。[`components/onboarding.tsx`](../components/onboarding.tsx)から参照されます。
+- `ONBOARDING_SLIDES`: 初回起動時のオンボーディングで案内するスライドの配列です(日記を書く・カレンダーで一覧を見る・日記を検索する・リマインダーとロックの設定、の4枚)。[`components/onboarding.tsx`](../components/onboarding.tsx)から参照されます。
 
 ## `settings-menu.ts` の構成
 

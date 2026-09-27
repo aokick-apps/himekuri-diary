@@ -29,6 +29,7 @@ import { TabScreenContainer } from '@/components/tab-screen-container';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { SAVE_SUCCESS_MESSAGE } from '@/constants/diary-messages';
 import { useCalendarLayoutPreference } from '@/contexts/calendar-layout-preference-context';
 import { useThemePreference } from '@/contexts/theme-preference-context';
 import { useDraftAutoSave } from '@/hooks/use-draft-auto-save';
@@ -68,8 +69,6 @@ const TODAY_DATE_KEY_REFRESH_INTERVAL_MS = 60 * 1000;
 
 // getSearchExcerptで通常マッチしないフォールバック時に使う抜粋の最大文字数(超える場合は省略記号を付ける)
 const FALLBACK_EXCERPT_MAX_LENGTH = 20;
-
-const SAVE_SUCCESS_MESSAGE = '保存しました';
 
 // タブバー(@react-navigation/bottom-tabsのデフォルト、tabBarStyle未カスタマイズ)のおおよその
 // コンテンツ高さ(セーフエリア分は含まない)。ボトムシート系モーダルの下端がタブバーと重ならないよう、
@@ -662,6 +661,15 @@ export default function HomeScreen() {
     setNewEntryDate(null);
   }, []);
 
+  // 日付指定モーダルからの保存成功時も、通常保存と同じトースト・ハプティクスでフィードバックを揃える
+  const handleNewEntrySaved = useCallback(() => {
+    setNewEntryDate(null);
+    setSaveToastMessage(SAVE_SUCCESS_MESSAGE);
+    if (process.env.EXPO_OS === 'ios') {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+  }, []);
+
   // トーストを非表示にする。SaveToastのuseEffect依存配列に含まれるため、参照を安定させないと
   // 再レンダーのたびにタイマーが張り直され、トーストが仕様通りの時間で消えなくなる
   const handleHideSaveToast = useCallback(() => {
@@ -1205,7 +1213,7 @@ export default function HomeScreen() {
           draftStorageKeyPrefix={DIARY_NEW_ENTRY_DRAFT_STORAGE_KEY_PREFIX}
           contentBottomPadding={modalContentBottomPadding}
           persist={handlePersistNewEntry}
-          onSaved={handleCloseNewEntryModal}
+          onSaved={handleNewEntrySaved}
           onClose={handleCloseNewEntryModal}
         />
 
@@ -1297,8 +1305,18 @@ export default function HomeScreen() {
                     />
                   </Pressable>
                 </View>
+                <ThemedText style={[styles.monthPickerHint, { color: iconColor }]}>
+                  薄く表示されている月は日記が無い期間のため選択できません
+                </ThemedText>
                 {/* maxHeightに収まらない画面でも全ての月に到達できるようスクロール可能にする */}
-                <ScrollView contentContainerStyle={styles.monthGrid} testID="month-picker-scroll">
+                <ScrollView
+                  style={styles.monthGridScrollView}
+                  contentContainerStyle={[
+                    styles.monthGrid,
+                    { paddingBottom: modalContentBottomPadding },
+                  ]}
+                  testID="month-picker-scroll"
+                >
                   {JA_MONTH_NAMES.map((monthName, index) => {
                     const month = index + 1;
                     const isSelected = pickerYear === displayedYear && month === displayedMonth;
@@ -1317,7 +1335,11 @@ export default function HomeScreen() {
                         onPress={() => handleSelectMonth(month)}
                         disabled={isDisabled}
                         accessibilityRole="button"
-                        accessibilityLabel={`${pickerYear}年${monthName}へ移動`}
+                        accessibilityLabel={
+                          isDisabled
+                            ? `${pickerYear}年${monthName}(日記が無いため選択できません)`
+                            : `${pickerYear}年${monthName}へ移動`
+                        }
                         accessibilityState={{ selected: isSelected, disabled: isDisabled }}
                       >
                         <ThemedText
@@ -1551,6 +1573,15 @@ const styles = StyleSheet.create({
   yearStepperButton: {
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  monthPickerHint: {
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: 'center',
+  },
+  monthGridScrollView: {
+    // maxHeightで区切られた領域の中で自身がスクロール可能な範囲として振る舞うために必要
+    flex: 1,
   },
   monthGrid: {
     flexDirection: 'row',

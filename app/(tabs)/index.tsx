@@ -851,6 +851,11 @@ export default function HomeScreen() {
 
   const handleDayPress = useCallback(
     (date: DateData) => {
+      // 読み込み中はentriesByDateが未確定で日記の有無を判定できないため、
+      // 既存日記と誤認して新規作成モーダルを開いてしまわないよう何もしない
+      if (isLoading) {
+        return;
+      }
       if (entriesByDate[date.dateString]?.length) {
         // 日付タップ時は専用の一覧画面へ遷移する
         router.push(`/day-entries/${date.dateString}`);
@@ -858,7 +863,7 @@ export default function HomeScreen() {
       }
       openNewEntryModal(date.dateString);
     },
-    [entriesByDate, router, openNewEntryModal],
+    [isLoading, entriesByDate, router, openNewEntryModal],
   );
 
   const renderDay = useCallback(
@@ -874,8 +879,9 @@ export default function HomeScreen() {
       const entryCount = dayEntries?.length ?? 0;
       const isDisabled = state === 'disabled' || state === 'inactive';
       const isToday = state === 'today';
-      // 未来日はmaxDateによりstateが'disabled'になるため、それ以外は押せる扱いにする
-      const isPressable = hasEntries || state !== 'disabled';
+      // 未来日はmaxDateによりstateが'disabled'になるため、それ以外は押せる扱いにする。
+      // 読み込み中はhandleDayPressが何もしないため、見た目・アクセシビリティ上も押せない扱いにする
+      const isPressable = !isLoading && (hasEntries || state !== 'disabled');
       // スクリーンリーダー向けに「何年何月何日か」「日記の有無・新規作成可否」が伝わるラベルを組み立てる
       const statusLabel = hasEntries
         ? `日記あり(${entryCount}件)`
@@ -931,7 +937,7 @@ export default function HomeScreen() {
         </Pressable>
       );
     },
-    [entriesByDate, tintColor, backgroundColor, dayCellHeight, handleDayPress],
+    [entriesByDate, isLoading, tintColor, backgroundColor, dayCellHeight, handleDayPress],
   );
 
   // 文字数カウンター表示用に、grapheme単位で数え直す(絵文字などでUTF-16の.lengthとずれるため)

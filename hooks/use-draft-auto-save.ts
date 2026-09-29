@@ -22,19 +22,38 @@ export function useDraftAutoSave({ draftKey, draft, isRestored }: DraftAutoSaveO
   // 明示的にキャンセルできるようにするために保持する
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // 保存(暗号化を伴う非同期処理)と削除の完了順が前後しないよう、書き込みを直列化するための末尾Promise。
+  // 待機中の書き込みが無ければ即座に実行する
+  const pendingWriteRef = useRef<Promise<void> | null>(null);
+  const enqueueWrite = useCallback((operation: () => Promise<void>) => {
+    const previous = pendingWriteRef.current;
+    const run = previous ? previous.then(operation) : operation();
+    const tracked: Promise<void> = run
+      .catch(() => {})
+      .then(() => {
+        if (pendingWriteRef.current === tracked) {
+          pendingWriteRef.current = null;
+        }
+      });
+    pendingWriteRef.current = tracked;
+    return run;
+  }, []);
+
   useEffect(() => {
     if (!isRestored || !draftKey) {
       return;
     }
     const timer = setTimeout(() => {
       timerRef.current = null;
-      const persist = draft ? saveDraftText(draftKey, draft) : AsyncStorage.removeItem(draftKey);
+      const persist = enqueueWrite(() =>
+        draft ? saveDraftText(draftKey, draft) : AsyncStorage.removeItem(draftKey),
+      );
       // 下書きの自動保存は補助的な処理のため、失敗しても静かに無視する(本保存の失敗は呼び出し側で伝える)
       persist.catch(() => {});
     }, DRAFT_AUTO_SAVE_DEBOUNCE_MS);
     timerRef.current = timer;
     return () => clearTimeout(timer);
-  }, [draft, isRestored, draftKey]);
+  }, [draft, isRestored, draftKey, enqueueWrite]);
 
   // 下書きキーを削除する。先に保留中のタイマーをキャンセルし、削除後の再書き込みを防ぐ
   const clearDraft = useCallback(async () => {
@@ -46,11 +65,11 @@ export function useDraftAutoSave({ draftKey, draft, isRestored }: DraftAutoSaveO
       return;
     }
     try {
-      await AsyncStorage.removeItem(draftKey);
+      await enqueueWrite(() => AsyncStorage.removeItem(draftKey));
     } catch {
       // 下書きキーのクリアに失敗しても致命的ではないため無視する
     }
-  }, [draftKey]);
+  }, [draftKey, enqueueWrite]);
 
   return { clearDraft };
 }

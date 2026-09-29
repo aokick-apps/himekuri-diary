@@ -7,9 +7,10 @@ import { DiaryEntryComposerModal } from '@/components/diary-entry-composer-modal
 import { type SaveDiaryEntryOptions, useSaveDiaryEntry } from '@/hooks/use-save-diary-entry';
 import { loadDraftText, saveDraftText } from '@/utils/diary-draft-storage';
 
+let mockIsTransitionMounted = true;
 jest.mock('@/hooks/use-modal-slide-transition', () => ({
   useModalSlideTransition: () => ({
-    isMounted: true,
+    isMounted: mockIsTransitionMounted,
     overlayOpacity: 1,
     contentTranslateY: 0,
   }),
@@ -72,6 +73,7 @@ function Host({
 describe('DiaryEntryComposerModal', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockIsTransitionMounted = true;
     loadDraftTextMock.mockResolvedValue(null);
     saveDraftTextMock.mockResolvedValue(undefined);
     saveEntryMock.mockResolvedValue(undefined);
@@ -91,6 +93,24 @@ describe('DiaryEntryComposerModal', () => {
     expect(modal.props.transparent).toBe(true);
     expect(modal.props.statusBarTranslucent).toBe(true);
     expect(modal.props.navigationBarTranslucent).toBe(true);
+  });
+
+  it('keeps the input text while the exit animation is running and resets it after unmounting', async () => {
+    const view = render(<DiaryEntryComposerModal {...defaultProps} />);
+    await waitFor(() => expect(loadDraftTextMock).toHaveBeenCalled());
+    fireEvent.changeText(screen.getByLabelText('日記本文'), '入力中の本文');
+
+    view.rerender(<DiaryEntryComposerModal {...defaultProps} dateKey={null} />);
+    expect(screen.getByLabelText('日記本文').props.value).toBe('入力中の本文');
+
+    setErrorMock.mockClear();
+    mockIsTransitionMounted = false;
+    view.rerender(<DiaryEntryComposerModal {...defaultProps} dateKey={null} />);
+    await waitFor(() => expect(setErrorMock).toHaveBeenCalledWith(null));
+    // 再度開くと、初期化済みの空の入力欄になっている
+    mockIsTransitionMounted = true;
+    view.rerender(<DiaryEntryComposerModal {...defaultProps} dateKey="2026-09-20" />);
+    expect(screen.getByLabelText('日記本文').props.value).toBe('');
   });
 
   it('restores the saved draft when the user has not edited the input while loading', async () => {

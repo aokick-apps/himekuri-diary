@@ -2396,6 +2396,104 @@ describe('HomeScreen', () => {
       });
     });
 
+    it('treats a day that actually has an entry as non-pressable while entries are still loading (label stays "日記なし" instead of "日記あり"), and tapping it neither navigates nor opens the new-entry modal, since entriesByDate is not yet determined during the load (境界値: 読み込み中は日記の有無が未確定)', async () => {
+      const now = new Date();
+      const { dayWithEntry } = pickTestDays(now);
+      const storedValue = JSON.stringify([
+        { id: '1', text: '日記あり', createdAt: isoAt(now, dayWithEntry) },
+      ]);
+      await AsyncStorage.setItem(STORAGE_KEY, storedValue);
+
+      let resolveGetItem: (value: string | null) => void = () => {};
+      jest.spyOn(AsyncStorage, 'getItem').mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveGetItem = resolve;
+          }),
+      );
+
+      render(<HomeScreen />);
+      await waitFor(() => expect(AsyncStorage.getItem).toHaveBeenCalled());
+
+      const loadingLabel = `${now.getFullYear()}年${now.getMonth() + 1}月${dayWithEntry}日、日記なし`;
+      const loadingCell = screen.getByLabelText(loadingLabel);
+      expect(loadingCell.props.accessibilityState?.disabled).toBe(true);
+
+      fireEvent.press(loadingCell);
+
+      expect(mockPush).not.toHaveBeenCalled();
+      const modalsWhileLoading = screen.UNSAFE_getAllByType(Modal);
+      expect(modalsWhileLoading.every((modal) => modal.props.visible === false)).toBe(true);
+
+      // 読み込み完了後は通常どおり、既存の日記へ遷移できることを確認する
+      await act(async () => {
+        resolveGetItem(storedValue);
+      });
+      await waitForInitialLoad();
+
+      const loadedLabel = `${now.getFullYear()}年${now.getMonth() + 1}月${dayWithEntry}日、日記あり(1件)`;
+      const loadedCell = screen.getByLabelText(loadedLabel);
+      expect(loadedCell.props.accessibilityState?.disabled).toBe(false);
+
+      fireEvent.press(loadedCell);
+
+      expect(mockPush).toHaveBeenCalledWith(`/day-entries/${toDateKeyForTest(now, dayWithEntry)}`);
+    });
+
+    it('does not open the new-entry modal when tapping a day that truly has no entries while entries are still loading, and opens it normally once loading finishes (境界値: 読み込み中は日記なしのセルも新規作成不可)', async () => {
+      const now = new Date();
+      const { dayWithEntry, dayWithoutEntry } = pickTestDays(now);
+      const storedValue = JSON.stringify([
+        { id: '1', text: '日記あり', createdAt: isoAt(now, dayWithEntry) },
+      ]);
+      await AsyncStorage.setItem(STORAGE_KEY, storedValue);
+
+      let resolveGetItem: (value: string | null) => void = () => {};
+      jest.spyOn(AsyncStorage, 'getItem').mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveGetItem = resolve;
+          }),
+      );
+
+      render(<HomeScreen />);
+      await waitFor(() => expect(AsyncStorage.getItem).toHaveBeenCalled());
+
+      const loadingLabel = `${now.getFullYear()}年${now.getMonth() + 1}月${dayWithoutEntry}日、日記なし`;
+      const loadingCell = screen.getByLabelText(loadingLabel);
+      expect(loadingCell.props.accessibilityState?.disabled).toBe(true);
+
+      fireEvent.press(loadingCell);
+
+      expect(mockPush).not.toHaveBeenCalled();
+      const modalsWhileLoading = screen.UNSAFE_getAllByType(Modal);
+      expect(modalsWhileLoading.every((modal) => modal.props.visible === false)).toBe(true);
+      expect(AsyncStorage.getItem).not.toHaveBeenCalledWith(
+        `diary-new-entry-draft-${toDateKeyForTest(now, dayWithoutEntry)}`,
+      );
+
+      // 読み込み完了後は通常どおり、日記の無い日のタップで新規作成モーダルが開くことを確認する
+      await act(async () => {
+        resolveGetItem(storedValue);
+      });
+      await waitForInitialLoad();
+
+      const loadedLabel = `${now.getFullYear()}年${now.getMonth() + 1}月${dayWithoutEntry}日、日記なし、タップして新規作成`;
+      const loadedCell = screen.getByLabelText(loadedLabel);
+      expect(loadedCell.props.accessibilityState?.disabled).toBe(false);
+
+      fireEvent.press(loadedCell);
+
+      await waitFor(() =>
+        expect(AsyncStorage.getItem).toHaveBeenCalledWith(
+          `diary-new-entry-draft-${toDateKeyForTest(now, dayWithoutEntry)}`,
+        ),
+      );
+      const [newEntryModal] = screen.UNSAFE_getAllByType(Modal);
+      expect(newEntryModal.props.visible).toBe(true);
+      expect(mockPush).not.toHaveBeenCalled();
+    });
+
     it('does nothing (does not navigate or open any modal) when tapping a future day cell, even though it has no diary entries, since future dates are excluded from both the day-entries and the new-entry-creation flow', async () => {
       const now = new Date();
       const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);

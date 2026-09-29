@@ -161,8 +161,9 @@ export default function DayEntriesScreen() {
   // 固定しつつ、時分秒は実際に保存した瞬間の時刻にする(buildCreatedAtForDateKeyAtTime)
   const handlePersistNewEntry = useCallback(
     async (trimmed: string) => {
+      // 対象日付が無いまま成功扱いにしないよう、失敗として伝える
       if (!date) {
-        return;
+        throw new Error('対象日付が未設定です');
       }
       const newEntry: DiaryEntry = {
         id: randomUUID(),

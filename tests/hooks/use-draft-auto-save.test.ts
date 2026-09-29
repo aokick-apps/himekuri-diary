@@ -235,4 +235,42 @@ describe('useDraftAutoSave', () => {
       expect(removeItemSpy).not.toHaveBeenCalled();
     });
   });
+
+  describe('write serialization', () => {
+    it('does not let a slow save finish after clearDraft removes the key (正常系: 保存とクリアの完了順を保つ)', async () => {
+      const order: string[] = [];
+      let resolveSave: () => void = () => {};
+      jest.mocked(saveDraftText).mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveSave = () => {
+              order.push('save');
+              resolve();
+            };
+          }),
+      );
+      removeItemSpy.mockImplementation(async () => {
+        order.push('remove');
+      });
+      const { result } = renderHook(() =>
+        useDraftAutoSave({ draftKey: KEY, draft: '本文', isRestored: true }),
+      );
+
+      act(() => {
+        jest.advanceTimersByTime(DEBOUNCE_MS);
+      });
+      let clearPromise: Promise<void> = Promise.resolve();
+      act(() => {
+        clearPromise = result.current.clearDraft();
+      });
+      expect(removeItemSpy).not.toHaveBeenCalled();
+
+      await act(async () => {
+        resolveSave();
+        await clearPromise;
+      });
+
+      expect(order).toEqual(['save', 'remove']);
+    });
+  });
 });

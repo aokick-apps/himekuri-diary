@@ -83,12 +83,28 @@ export function DiaryEntryComposerModal({
   const inputMaxHeight = Math.max(INPUT_MIN_HEIGHT, windowHeight * INPUT_MAX_HEIGHT_RATIO);
   const isInputScrollable = inputContentHeight > inputMaxHeight;
 
-  // 対象日付が変わるたびに入力内容とエラー表示を初期化する
+  const isModalMounted = transition.isMounted;
+
+  // 対象日付が変わるたびに入力内容とエラー表示を初期化する。
+  // nullへ戻る際は退場アニメーション中に入力欄が空に見えないよう、ここでは初期化しない
   useEffect(() => {
+    if (draftKey === null) {
+      return;
+    }
     setDraft('');
     setInputContentHeight(0);
     setError(null);
   }, [draftKey, setError]);
+
+  // 退場アニメーション完了後(描画終了時)に初期化する
+  useEffect(() => {
+    if (isModalMounted) {
+      return;
+    }
+    setDraft('');
+    setInputContentHeight(0);
+    setError(null);
+  }, [isModalMounted, setError]);
 
   // 自動保存されていた下書きが残っていれば、モーダルを開いた際(dateKeyがセットされた際)に復元する
   const handleRestoreDraft = useCallback((storedDraft: string) => {

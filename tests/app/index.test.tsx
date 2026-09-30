@@ -3385,12 +3385,12 @@ describe('HomeScreen', () => {
   describe('カレンダーセルの日記件数インジケーター(ドット/バッジ)', () => {
     // 日記が0件の日は何も表示せず、1件の日はドット(styles.entryDot)、2件以上の日は
     // 合計件数を表示する丸バッジ(styles.entryCountBadge)を表示する。
-    // ドットは`width: 7, height: 7`、バッジ本体は`minWidth: 16, height: 16`という
+    // ドットは`width: 10, height: 10`、バッジ本体は`minWidth: 16, height: 16`という
     // 一意な組み合わせのスタイルを持つため、それぞれを目印にView自体を特定するヘルパーを用意する。
     function findEntryDotViews() {
       return screen.UNSAFE_getAllByType(View).filter((node) => {
         const flattened = StyleSheet.flatten(node.props.style ?? {});
-        return flattened.width === 7 && flattened.height === 7;
+        return flattened.width === 10 && flattened.height === 10;
       });
     }
 
@@ -5986,6 +5986,41 @@ describe('HomeScreen', () => {
         const button = getWeekCreateButton(PAST_DATE_KEY);
         expect(button.props.accessibilityRole).toBe('button');
         expect(StyleSheet.flatten(button.props.style).minHeight).toBeGreaterThanOrEqual(44);
+      });
+
+      it('gives the create button a hitSlop to enlarge the tap area (アクセシビリティ)', async () => {
+        await renderInWeekLayoutAfterLoad();
+
+        expect(getWeekCreateButton(PAST_DATE_KEY).props.hitSlop).toBe(8);
+      });
+
+      it('shows a hint explaining the "+" button and emphasizes only the today column when the whole week has no entries (正常系)', async () => {
+        await renderInWeekLayoutAfterLoad();
+
+        expect(screen.getByText(/「\+」をタップすると/)).toBeTruthy();
+        expect(
+          StyleSheet.flatten(getWeekCreateButton(TODAY_DATE_KEY).props.style).borderWidth,
+        ).toBe(2);
+        expect(StyleSheet.flatten(getWeekCreateButton(PAST_DATE_KEY).props.style).borderWidth).toBe(
+          1,
+        );
+      });
+
+      it('does not show the hint nor emphasize the today column when the week has an entry (境界値)', async () => {
+        await AsyncStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify([
+            { id: '1', text: '過去の日記', createdAt: buildCreatedAtForDateKey(PAST_DATE_KEY) },
+          ]),
+        );
+        jest.clearAllMocks();
+
+        await renderInWeekLayoutAfterLoad();
+
+        expect(screen.queryByText(/「\+」をタップすると/)).toBeNull();
+        expect(
+          StyleSheet.flatten(getWeekCreateButton(TODAY_DATE_KEY).props.style).borderWidth,
+        ).toBe(1);
       });
 
       it('shows a create button on every day of a fully past week (境界値: 全日が過去の週)', async () => {

@@ -342,6 +342,9 @@ function WeekCalendarView({
     }),
   );
 
+  const isWeekEmpty =
+    !isLoading && weekDays.every((weekDay) => (entriesByDate[weekDay.dateKey] ?? []).length === 0);
+
   return (
     <View
       style={[styles.weekWrapper, { borderColor: iconColor, backgroundColor }]}
@@ -369,6 +372,11 @@ function WeekCalendarView({
         </Pressable>
       </View>
       <ScrollView contentContainerStyle={styles.weekScrollContent}>
+        {isWeekEmpty ? (
+          <ThemedText style={styles.weekEmptyHint}>
+            「+」をタップすると、その日の日記を新規作成できます
+          </ThemedText>
+        ) : null}
         <View style={styles.weekRow}>
           {weekDays.map((weekDay) => {
             const isToday = weekDay.dateKey === todayDateKey;
@@ -418,7 +426,13 @@ function WeekCalendarView({
                   {!isLoading && dayEntries.length === 0 && weekDay.dateKey <= todayDateKey ? (
                     <Pressable
                       onPress={() => onCreateEntry(weekDay.dateKey)}
-                      style={[styles.weekCreateButton, { borderColor: tintColor }]}
+                      hitSlop={8}
+                      style={[
+                        styles.weekCreateButton,
+                        { borderColor: tintColor },
+                        // 全日が空の週では今日の列だけ強調して、最初に押す場所が分かるようにする
+                        isWeekEmpty && isToday && styles.weekCreateButtonEmphasized,
+                      ]}
                       accessibilityRole="button"
                       accessibilityLabel={`${formatDateHeading(weekDay.dateKey)}の日記を新規作成`}
                     >
@@ -1547,6 +1561,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderStyle: 'dashed',
   },
+  weekCreateButtonEmphasized: {
+    borderWidth: 2,
+    borderStyle: 'solid',
+  },
+  weekEmptyHint: {
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: 'center',
+    opacity: 0.7,
+    paddingBottom: 8,
+  },
   weekCreateButtonText: {
     fontSize: 20,
     lineHeight: 24,
@@ -1624,9 +1649,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   entryDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
   },
   entryCountBadge: {
     minWidth: 16,

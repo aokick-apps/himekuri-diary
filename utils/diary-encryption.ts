@@ -125,6 +125,16 @@ export async function getOrCreateEncryptionKey(): Promise<Uint8Array> {
   }
 }
 
+// 保存済みの暗号鍵を読み取り専用で取得する。未保存でも新規生成せず例外を投げる
+// (暗号化データが残っているのに鍵を作り直すと復号不能になり、取り返しがつかないため)。
+export async function getExistingEncryptionKey(): Promise<Uint8Array> {
+  const stored = await readStoredKey();
+  if (!stored) {
+    throw new Error('暗号鍵が保存されていません');
+  }
+  return base64ToBytes(stored);
+}
+
 // 文字列が暗号化済みの形式(ENCRYPTED_PREFIXで始まる)かどうかを判定する。後方互換マイグレーションに使う。
 export function isEncryptedPayload(value: string): boolean {
   return value.startsWith(ENCRYPTED_PREFIX);

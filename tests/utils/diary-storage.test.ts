@@ -299,20 +299,29 @@ describe('getDiaryEntryById', () => {
     await expect(getDiaryEntryById('does-not-exist')).resolves.toBeNull();
   });
 
-  it('returns null instead of throwing when the stored value fails to decrypt (異常系: 復号失敗)', async () => {
+  it('throws, rather than returning null, when the stored value fails to decrypt (異常系: 復号失敗はnot-foundと区別)', async () => {
     await AsyncStorage.setItem(buildDiaryEntryKey('1'), 'encrypted:v1:not-a-real-payload');
 
-    await expect(getDiaryEntryById('1')).resolves.toBeNull();
+    await expect(getDiaryEntryById('1')).rejects.toThrow();
   });
 
-  it('returns null instead of throwing when the decrypted payload does not match the DiaryEntry shape (異常系: スキーマ不整合)', async () => {
+  it('throws without generating a new key when an encrypted entry exists but no key is stored (異常系: 鍵なし+暗号化データ)', async () => {
+    await seedDiaryEntry({ id: '1', text: '暗号化済み', createdAt: '2026-01-01T00:00:00.000Z' });
+    secureStoreMock.__reset();
+    jest.clearAllMocks();
+
+    await expect(getDiaryEntryById('1')).rejects.toThrow();
+    expect(SecureStore.setItemAsync).not.toHaveBeenCalled();
+  });
+
+  it('throws, rather than returning null, when the decrypted payload does not match the DiaryEntry shape (異常系: スキーマ不整合)', async () => {
     const key = await getOrCreateEncryptionKey();
     await AsyncStorage.setItem(
       buildDiaryEntryKey('1'),
       encryptText(JSON.stringify({ foo: 'bar' }), key),
     );
 
-    await expect(getDiaryEntryById('1')).resolves.toBeNull();
+    await expect(getDiaryEntryById('1')).rejects.toThrow();
   });
 
   it('does not read or write any other AsyncStorage key (他のエントリに影響を与えないこと)', async () => {
@@ -378,15 +387,80 @@ describe('getAllDiaryEntries', () => {
     warnSpy.mockRestore();
   });
 
-  it('skips an entry that fails decryption due to a wrong/mismatched key (異常系)', async () => {
-    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+  it('notifies onError instead of onPartialCorruption when every encrypted entry fails to decrypt due to a mismatched key (異常系: 全件復号失敗)', async () => {
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    // 端末側には別の鍵が保存されている状況
+    await getOrCreateEncryptionKey();
     const otherKey = new Uint8Array(32).fill(9);
-    const encryptedWithOtherKey = encryptText(JSON.stringify(sampleEntries[0]), otherKey);
-    await AsyncStorage.setItem(buildDiaryEntryKey('1'), encryptedWithOtherKey);
+    await AsyncStorage.setItem(
+      buildDiaryEntryKey('1'),
+      encryptText(JSON.stringify(sampleEntries[0]), otherKey),
+    );
+    await AsyncStorage.setItem(
+      buildDiaryEntryKey('2'),
+      encryptText(JSON.stringify(sampleEntries[1]), otherKey),
+    );
+    const onError = jest.fn();
+    const onPartialCorruption = jest.fn();
 
-    await expect(getAllDiaryEntries()).resolves.toEqual([]);
-    expect(warnSpy).toHaveBeenCalledTimes(1);
+    await expect(getAllDiaryEntries({ onError, onPartialCorruption })).resolves.toEqual([]);
+
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onPartialCorruption).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
+  it('skips only the entry that fails decryption and reports partial corruption when other entries are readable (異常系: 一部のみ復号失敗)', async () => {
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    await seedDiaryEntry(sampleEntries[0]);
+    const otherKey = new Uint8Array(32).fill(9);
+    await AsyncStorage.setItem(
+      buildDiaryEntryKey('other'),
+      encryptText(JSON.stringify(sampleEntries[1]), otherKey),
+    );
+    const onError = jest.fn();
+    const onPartialCorruption = jest.fn();
+
+    await expect(getAllDiaryEntries({ onError, onPartialCorruption })).resolves.toEqual([
+      sampleEntries[0],
+    ]);
+
+    expect(onError).not.toHaveBeenCalled();
+    expect(onPartialCorruption).toHaveBeenCalledWith(1, 2);
     warnSpy.mockRestore();
+  });
+
+  it('notifies onError without generating a new key when encrypted entries exist but no key is stored (異常系: 鍵なし+暗号化データ)', async () => {
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    await seedDiaryEntry(sampleEntries[0]);
+    secureStoreMock.__reset();
+    jest.clearAllMocks();
+    const onError = jest.fn();
+
+    await expect(getAllDiaryEntries({ onError })).resolves.toEqual([]);
+
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(SecureStore.setItemAsync).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
+  it('notifies onError without generating a new key when the legacy encrypted data exists but no key is stored (異常系: レガシー移行時の鍵なし)', async () => {
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const key = await getOrCreateEncryptionKey();
+    await AsyncStorage.setItem(
+      DIARY_ENTRIES_STORAGE_KEY,
+      encryptText(JSON.stringify(sampleEntries), key),
+    );
+    secureStoreMock.__reset();
+    jest.clearAllMocks();
+    const onError = jest.fn();
+
+    await expect(getAllDiaryEntries({ onError })).resolves.toEqual([]);
+
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(SecureStore.setItemAsync).not.toHaveBeenCalled();
+    expect(await AsyncStorage.getItem(DIARY_ENTRIES_STORAGE_KEY)).not.toBeNull();
+    errorSpy.mockRestore();
   });
 
   it('skips an entry whose decrypted payload does not match the DiaryEntry shape (異常系: スキーマ不整合)', async () => {

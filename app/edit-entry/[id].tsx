@@ -23,7 +23,12 @@ import { useSaveDiaryEntry } from '@/hooks/use-save-diary-entry';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { DIARY_EDIT_DRAFT_STORAGE_KEY_PREFIX, loadDraftText } from '@/utils/diary-draft-storage';
 import { BODY_MAX_LENGTH, splitIntoGraphemes, truncateToBodyMaxLength } from '@/utils/diary-text';
-import { getDiaryEntryById, saveDiaryEntry, type DiaryEntry } from '@/utils/diary-storage';
+import {
+  DIARY_LOAD_ERROR_MESSAGE,
+  getDiaryEntryById,
+  saveDiaryEntry,
+  type DiaryEntry,
+} from '@/utils/diary-storage';
 
 // 保存成功のトーストを表示してから前の画面へ戻るまでの待ち時間(ミリ秒)。
 // 遷移が早すぎると保存できたかを確認できないため、トーストを読める長さだけ画面に留める
@@ -38,6 +43,7 @@ export default function EditEntryScreen() {
   const insets = useSafeAreaInsets();
 
   const [isLoaded, setIsLoaded] = useState(false);
+  const [isLoadFailed, setIsLoadFailed] = useState(false);
   const [editDraft, setEditDraft] = useState('');
   const { isSaving: isSavingEdit, error: editError, save: saveEdit } = useSaveDiaryEntry();
   // 下書き復元が完了したか。完了前に自動保存effectを動かすと、復元中の一時的な内容で
@@ -84,8 +90,21 @@ export default function EditEntryScreen() {
     let isCancelled = false;
     // idが変わる場合に備え、新しいエントリの下書き復元が終わるまで自動保存effectを止める
     setIsDraftRestored(false);
+    setIsLoadFailed(false);
     (async () => {
-      const found = id ? await getDiaryEntryById(id) : null;
+      let found: DiaryEntry | null = null;
+      try {
+        found = id ? await getDiaryEntryById(id) : null;
+      } catch (error) {
+        console.error('EditEntryScreen: 日記データの読み込みに失敗しました', error);
+        if (isCancelled || !isMountedRef.current) {
+          return;
+        }
+        // 「見つからない」と区別して読み込み失敗を表示する。下書きの自動保存は有効化しない
+        setIsLoadFailed(true);
+        setIsLoaded(true);
+        return;
+      }
       if (isCancelled || !isMountedRef.current) {
         return;
       }
@@ -248,6 +267,14 @@ export default function EditEntryScreen() {
     return (
       <ThemedView style={styles.loadingContainer}>
         <ActivityIndicator color={tintColor} />
+      </ThemedView>
+    );
+  }
+
+  if (isLoadFailed) {
+    return (
+      <ThemedView style={styles.loadingContainer}>
+        <ThemedText>{DIARY_LOAD_ERROR_MESSAGE}</ThemedText>
       </ThemedView>
     );
   }

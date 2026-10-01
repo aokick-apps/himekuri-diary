@@ -7,7 +7,11 @@ import { Alert, StyleSheet } from 'react-native';
 
 import EditEntryScreen from '@/app/edit-entry/[id]';
 import { decryptText, encryptText, getOrCreateEncryptionKey } from '@/utils/diary-encryption';
-import { buildDiaryEntryKey, type DiaryEntry } from '@/utils/diary-storage';
+import {
+  buildDiaryEntryKey,
+  DIARY_LOAD_ERROR_MESSAGE,
+  type DiaryEntry,
+} from '@/utils/diary-storage';
 import { BODY_MAX_LENGTH } from '@/utils/diary-text';
 
 // ネイティブの`AsyncStorage`はJest環境では利用できないため、公式のインメモリモックに差し替える
@@ -263,6 +267,17 @@ describe('EditEntryScreen', () => {
     render(<EditEntryScreen />);
 
     expect(await screen.findByText('編集対象の日記が見つかりませんでした。')).toBeTruthy();
+  });
+
+  it('shows the load error message, not the not-found message, when the entry exists but cannot be read (異常系: 読み込み失敗)', async () => {
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    await AsyncStorage.setItem(buildDiaryEntryKey(ENTRY_ID), 'encrypted:v1:not-a-real-payload');
+
+    render(<EditEntryScreen />);
+
+    expect(await screen.findByText(DIARY_LOAD_ERROR_MESSAGE)).toBeTruthy();
+    expect(screen.queryByText('編集対象の日記が見つかりませんでした。')).toBeNull();
+    errorSpy.mockRestore();
   });
 
   // 補足: React 18以降はアンマウント済みコンポーネントへのstate更新を検知するコンソール警告自体が

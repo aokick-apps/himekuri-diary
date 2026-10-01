@@ -4,6 +4,7 @@ import { isDraftStorageKey } from '@/utils/diary-draft-storage';
 import {
   decryptText,
   encryptText,
+  getExistingEncryptionKey,
   getOrCreateEncryptionKey,
   isEncryptedPayload,
 } from '@/utils/diary-encryption';
@@ -62,7 +63,7 @@ async function migrateLegacyEntriesIfNeeded(): Promise<void> {
 
   let parsed: unknown;
   if (isEncryptedPayload(legacyStored)) {
-    const key = await getOrCreateEncryptionKey();
+    const key = await getExistingEncryptionKey();
     parsed = JSON.parse(decryptText(legacyStored, key));
   } else {
     // 暗号化対応前に保存された平文JSON(後方互換)
@@ -164,6 +165,7 @@ export async function getAllDiaryEntries(
     const validEntries: DiaryEntry[] = [];
     let totalCount = 0;
     let invalidCount = 0;
+    let encryptedCount = 0;
 
     for (const [, storedValue] of keyValuePairs) {
       if (!storedValue) {
@@ -174,8 +176,12 @@ export async function getAllDiaryEntries(
       const isEncrypted = isEncryptedPayload(storedValue);
       // 鍵の取得失敗は全件に影響するため、要素単位のtry/catchの外で外側のcatchへ伝播させ、
       // 「全エントリが破損している」のではなく読み込み失敗としてonErrorに通知する
+      if (isEncrypted) {
+        encryptedCount += 1;
+      }
+      // 鍵が無い場合に新規生成すると既存の暗号化データが復号不能になるため、読み取り専用で取得する
       if (isEncrypted && !key) {
-        key = await getOrCreateEncryptionKey();
+        key = await getExistingEncryptionKey();
       }
 
       try {
@@ -195,6 +201,13 @@ export async function getAllDiaryEntries(
         // 1件の破損が全件読み込み不能に波及しないよう、このエントリだけをスキップする
         invalidCount += 1;
       }
+    }
+
+    // 暗号化エントリが存在するのに1件も読めない場合は、破損ではなく鍵の不一致等による読み込み失敗として扱う
+    if (encryptedCount > 0 && validEntries.length === 0) {
+      throw new Error(
+        `暗号化された${encryptedCount}件のエントリを1件も復号できませんでした(全${totalCount}件)`,
+      );
     }
 
     if (invalidCount > 0) {
@@ -225,27 +238,28 @@ export async function getAllDiaryEntries(
 
 /**
  * idを指定して日記エントリ1件だけを取得する。編集画面が、全件取得の`getAllDiaryEntries`を
- * 使わずO(1)で対象の1件を取得するために使う。見つからない・復号失敗時はnullを返す。
+ * 使わずO(1)で対象の1件を取得するために使う。エントリが存在しない場合のみnullを返し、
+ * データが存在するのに読めない場合(鍵の取得失敗・復号失敗・スキーマ不整合)は例外を投げて
+ * 「見つからない」と区別できるようにする。
  */
 export async function getDiaryEntryById(id: string): Promise<DiaryEntry | null> {
-  try {
-    const stored = await AsyncStorage.getItem(buildDiaryEntryKey(id));
-    if (!stored) {
-      return null;
-    }
-
-    let parsed: unknown;
-    if (isEncryptedPayload(stored)) {
-      const key = await getOrCreateEncryptionKey();
-      parsed = JSON.parse(decryptText(stored, key));
-    } else {
-      // 暗号化対応前に保存された平文JSON(後方互換)
-      parsed = JSON.parse(stored);
-    }
-    return isDiaryEntry(parsed) ? parsed : null;
-  } catch {
+  const stored = await AsyncStorage.getItem(buildDiaryEntryKey(id));
+  if (!stored) {
     return null;
   }
+
+  let parsed: unknown;
+  if (isEncryptedPayload(stored)) {
+    const key = await getExistingEncryptionKey();
+    parsed = JSON.parse(decryptText(stored, key));
+  } else {
+    // 暗号化対応前に保存された平文JSON(後方互換)
+    parsed = JSON.parse(stored);
+  }
+  if (!isDiaryEntry(parsed)) {
+    throw new Error('日記データの形式が不正です');
+  }
+  return parsed;
 }
 
 /**

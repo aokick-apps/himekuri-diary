@@ -4,6 +4,7 @@ import { Platform } from 'react-native';
 import {
   decryptText,
   encryptText,
+  getExistingEncryptionKey,
   getOrCreateEncryptionKey,
   isEncryptedPayload,
 } from '@/utils/diary-encryption';
@@ -161,6 +162,19 @@ describe('utils/diary-encryption', () => {
     it('throws when the payload is too short to contain a full nonce', () => {
       // プレフィックスの後にnonce長(12バイト)未満のデータしか無い場合
       expect(() => decryptText('encrypted:v1:AAAA', key)).toThrow();
+    });
+  });
+
+  describe('getExistingEncryptionKey', () => {
+    it('throws without generating or persisting a key when none is stored', async () => {
+      await expect(getExistingEncryptionKey()).rejects.toThrow();
+      expect(SecureStore.setItemAsync).not.toHaveBeenCalled();
+    });
+
+    it('returns the stored key once it has been created', async () => {
+      const created = await getOrCreateEncryptionKey();
+      const existing = await getExistingEncryptionKey();
+      expect(Array.from(existing)).toEqual(Array.from(created));
     });
   });
 

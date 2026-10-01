@@ -2441,57 +2441,64 @@ describe('HomeScreen', () => {
     });
 
     it('does not open the new-entry modal when tapping a day that truly has no entries while entries are still loading, and opens it normally once loading finishes (境界値: 読み込み中は日記なしのセルも新規作成不可)', async () => {
-      const now = new Date();
-      const { dayWithEntry, dayWithoutEntry } = pickTestDays(now);
-      const storedValue = JSON.stringify([
-        { id: '1', text: '日記あり', createdAt: isoAt(now, dayWithEntry) },
-      ]);
-      await AsyncStorage.setItem(STORAGE_KEY, storedValue);
+      // 月初実行だとdayWithoutEntryが未来日になり新規作成不可となるため、基準日を固定する
+      jest.useFakeTimers();
+      try {
+        const now = new Date(2026, 7, 25, 12, 0, 0);
+        jest.setSystemTime(now);
+        const { dayWithEntry, dayWithoutEntry } = pickTestDays(now);
+        const storedValue = JSON.stringify([
+          { id: '1', text: '日記あり', createdAt: isoAt(now, dayWithEntry) },
+        ]);
+        await AsyncStorage.setItem(STORAGE_KEY, storedValue);
 
-      let resolveGetItem: (value: string | null) => void = () => {};
-      jest.spyOn(AsyncStorage, 'getItem').mockImplementationOnce(
-        () =>
-          new Promise((resolve) => {
-            resolveGetItem = resolve;
-          }),
-      );
+        let resolveGetItem: (value: string | null) => void = () => {};
+        jest.spyOn(AsyncStorage, 'getItem').mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              resolveGetItem = resolve;
+            }),
+        );
 
-      render(<HomeScreen />);
-      await waitFor(() => expect(AsyncStorage.getItem).toHaveBeenCalled());
+        render(<HomeScreen />);
+        await waitFor(() => expect(AsyncStorage.getItem).toHaveBeenCalled());
 
-      const loadingLabel = `${now.getFullYear()}年${now.getMonth() + 1}月${dayWithoutEntry}日、日記なし`;
-      const loadingCell = screen.getByLabelText(loadingLabel);
-      expect(loadingCell.props.accessibilityState?.disabled).toBe(true);
+        const loadingLabel = `${now.getFullYear()}年${now.getMonth() + 1}月${dayWithoutEntry}日、日記なし`;
+        const loadingCell = screen.getByLabelText(loadingLabel);
+        expect(loadingCell.props.accessibilityState?.disabled).toBe(true);
 
-      fireEvent.press(loadingCell);
+        fireEvent.press(loadingCell);
 
-      expect(mockPush).not.toHaveBeenCalled();
-      const modalsWhileLoading = screen.UNSAFE_getAllByType(Modal);
-      expect(modalsWhileLoading.every((modal) => modal.props.visible === false)).toBe(true);
-      expect(AsyncStorage.getItem).not.toHaveBeenCalledWith(
-        `diary-new-entry-draft-${toDateKeyForTest(now, dayWithoutEntry)}`,
-      );
-
-      // 読み込み完了後は通常どおり、日記の無い日のタップで新規作成モーダルが開くことを確認する
-      await act(async () => {
-        resolveGetItem(storedValue);
-      });
-      await waitForInitialLoad();
-
-      const loadedLabel = `${now.getFullYear()}年${now.getMonth() + 1}月${dayWithoutEntry}日、日記なし、タップして新規作成`;
-      const loadedCell = screen.getByLabelText(loadedLabel);
-      expect(loadedCell.props.accessibilityState?.disabled).toBe(false);
-
-      fireEvent.press(loadedCell);
-
-      await waitFor(() =>
-        expect(AsyncStorage.getItem).toHaveBeenCalledWith(
+        expect(mockPush).not.toHaveBeenCalled();
+        const modalsWhileLoading = screen.UNSAFE_getAllByType(Modal);
+        expect(modalsWhileLoading.every((modal) => modal.props.visible === false)).toBe(true);
+        expect(AsyncStorage.getItem).not.toHaveBeenCalledWith(
           `diary-new-entry-draft-${toDateKeyForTest(now, dayWithoutEntry)}`,
-        ),
-      );
-      const [newEntryModal] = screen.UNSAFE_getAllByType(Modal);
-      expect(newEntryModal.props.visible).toBe(true);
-      expect(mockPush).not.toHaveBeenCalled();
+        );
+
+        // 読み込み完了後は通常どおり、日記の無い日のタップで新規作成モーダルが開くことを確認する
+        await act(async () => {
+          resolveGetItem(storedValue);
+        });
+        await waitForInitialLoad();
+
+        const loadedLabel = `${now.getFullYear()}年${now.getMonth() + 1}月${dayWithoutEntry}日、日記なし、タップして新規作成`;
+        const loadedCell = screen.getByLabelText(loadedLabel);
+        expect(loadedCell.props.accessibilityState?.disabled).toBe(false);
+
+        fireEvent.press(loadedCell);
+
+        await waitFor(() =>
+          expect(AsyncStorage.getItem).toHaveBeenCalledWith(
+            `diary-new-entry-draft-${toDateKeyForTest(now, dayWithoutEntry)}`,
+          ),
+        );
+        const [newEntryModal] = screen.UNSAFE_getAllByType(Modal);
+        expect(newEntryModal.props.visible).toBe(true);
+        expect(mockPush).not.toHaveBeenCalled();
+      } finally {
+        jest.useRealTimers();
+      }
     });
 
     it('does nothing (does not navigate or open any modal) when tapping a future day cell, even though it has no diary entries, since future dates are excluded from both the day-entries and the new-entry-creation flow', async () => {

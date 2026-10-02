@@ -113,46 +113,61 @@
 
 | ライブラリ | 用途 | 主な使用箇所 |
 | --- | --- | --- |
-| [@react-native-async-storage/async-storage](https://react-native-async-storage.github.io/async-storage/) | 端末内への簡易キー・バリュー永続化ストレージ。日記データの保存に使用 | `app/(tabs)/index.tsx`（日記エントリの保存・読み込み） |
+| [@react-native-async-storage/async-storage](https://react-native-async-storage.github.io/async-storage/) | 端末内への簡易キー・バリュー永続化ストレージ。日記データの保存に使用 | `utils/diary-storage.ts`（日記エントリ）、`utils/diary-draft-storage.ts`（下書き）、`contexts/` 配下（各種設定の保存） |
 | [@noble/ciphers](https://github.com/paulmillr/noble-ciphers) | 依存なし・監査実績のある純粋JS実装のAES-256-GCM暗号化ライブラリ。AsyncStorageに保存する日記データの暗号化に使用 | `utils/diary-encryption.ts` |
 
 ### ナビゲーション
 
 | ライブラリ | 用途 | 主な使用箇所 |
 | --- | --- | --- |
-| [@react-navigation/native](https://reactnavigation.org/) | ナビゲーションの基盤ライブラリ（expo-routerが内部で利用） | `app/_layout.tsx` など |
-| [@react-navigation/bottom-tabs](https://reactnavigation.org/) | 画面下部のタブナビゲーションを実現する | `app/(tabs)/_layout.tsx` |
-| [@react-navigation/elements](https://reactnavigation.org/) | ナビゲーション周りの共通UIパーツ | `components/` 配下のナビゲーション関連コンポーネント |
+| [@react-navigation/native](https://reactnavigation.org/) | ナビゲーションの基盤ライブラリ（expo-routerが内部で利用） | `app/_layout.tsx`（テーマの適用）など |
+| [@react-navigation/bottom-tabs](https://reactnavigation.org/) | 画面下部のタブナビゲーションを実現する | `components/haptic-tab.tsx`（タブバーボタンの型）、`app/(tabs)/_layout.tsx` |
+| [@react-navigation/elements](https://reactnavigation.org/) | ナビゲーション周りの共通UIパーツ | `components/haptic-tab.tsx`（`PlatformPressable`） |
 
 ### UI・アニメーション・操作性
 
 | ライブラリ | 用途 | 主な使用箇所 |
 | --- | --- | --- |
-| [react-native-reanimated](https://docs.swmansion.com/react-native-reanimated/) | 高性能なアニメーションを実現する | `app/_layout.tsx` など |
+| [react-native-reanimated](https://docs.swmansion.com/react-native-reanimated/) | 高性能なアニメーションを実現する | `app/_layout.tsx`（`import 'react-native-reanimated'` による初期化のみ。アニメーションAPIの直接利用は現状なし） |
 | [react-native-worklets](https://docs.swmansion.com/react-native-reanimated/) | Reanimatedが利用するワークレット（UIスレッド上で実行される関数）の基盤 | Reanimated関連の内部依存 |
-| [react-native-gesture-handler](https://docs.swmansion.com/react-native-gesture-handler/) | ジェスチャー（タップ・スワイプなど）のハンドリング | ナビゲーション・タブ操作の内部依存 |
-| [react-native-safe-area-context](https://docs.expo.dev/versions/v54.0.0/sdk/safe-area-context/) | ノッチ・ステータスバーなどを避けた安全領域の取得 | `components/themed-view.tsx` など画面レイアウト全般 |
+| [react-native-gesture-handler](https://docs.swmansion.com/react-native-gesture-handler/) | ジェスチャー（タップ・スワイプなど）のハンドリング | expo-router / React Navigation の内部依存（コードからの直接利用は現状なし） |
+| [react-native-safe-area-context](https://docs.expo.dev/versions/v54.0.0/sdk/safe-area-context/) | ノッチ・ステータスバーなどを避けた安全領域の取得 | `components/tab-screen-container.tsx`、`app/` 配下の各画面、`components/onboarding.tsx`、`components/app-lock-screen.tsx` |
 | [react-native-screens](https://docs.expo.dev/versions/v54.0.0/sdk/screen/) | ネイティブの画面遷移を最適化する | ナビゲーション全般（expo-router/ React Navigation の内部依存） |
 | [react-native-web](https://necolas.github.io/react-native-web/) | React NativeのコンポーネントをWeb上で動作させる | Web実行時の内部依存 |
 | [react-native-calendars](https://github.com/wix/react-native-calendars) | カレンダーUIコンポーネント。純JS実装でネイティブモジュールを持たないためNew Architectureとも互換性がある | `app/(tabs)/index.tsx`（日記のカレンダー表示・日付タップでの一覧表示） |
-| [@expo/vector-icons](https://docs.expo.dev/guides/icons/) | アイコンフォント集 | `components/ui/icon-symbol.tsx` など |
+| [@expo/vector-icons](https://docs.expo.dev/guides/icons/) | アイコンフォント集 | `components/ui/icon-symbol.tsx`（`MaterialIcons`。iOS以外のアイコン表示） |
 
 ### Expo SDKモジュール
 
+コードから直接 import しているモジュールです。
+
 | ライブラリ | 用途 | 主な使用箇所 |
 | --- | --- | --- |
-| [expo-constants](https://docs.expo.dev/versions/v54.0.0/sdk/constants/) | アプリ設定値・実行時定数の取得 | 設定値が必要な箇所全般 |
-| [expo-crypto](https://docs.expo.dev/versions/v54.0.0/sdk/crypto/) | 一意なID（UUID）生成、暗号鍵・nonce用の暗号学的乱数生成 | `app/(tabs)/index.tsx`（日記エントリIDの生成）、`utils/diary-encryption.ts`（鍵・nonce生成） |
+| [expo-crypto](https://docs.expo.dev/versions/v54.0.0/sdk/crypto/) | 一意なID（UUID）生成、暗号鍵・nonce用の暗号学的乱数生成 | `app/(tabs)/index.tsx`・`app/day-entries/[date].tsx`（日記エントリIDの生成）、`utils/diary-encryption.ts`（鍵・nonce生成） |
 | [expo-secure-store](https://docs.expo.dev/versions/v54.0.0/sdk/securestore/) | 日記の暗号鍵を端末のKeychain（iOS）/ Keystore（Android）に安全に保存する | `utils/diary-encryption.ts` |
-| [expo-font](https://docs.expo.dev/versions/v54.0.0/sdk/font/) | カスタムフォントの読み込み | `app/_layout.tsx`（フォントロード） |
-| [expo-haptics](https://docs.expo.dev/versions/v54.0.0/sdk/haptics/) | 触覚フィードバック（タップ時の振動） | `components/haptic-tab.tsx` |
-| [expo-image](https://docs.expo.dev/versions/v54.0.0/sdk/image/) | 高機能な画像表示コンポーネント | 画像を表示する画面・コンポーネント |
-| [expo-linking](https://docs.expo.dev/versions/v54.0.0/sdk/linking/) | ディープリンク・外部URLへのリンク処理 | `components/external-link.tsx` |
-| [expo-splash-screen](https://docs.expo.dev/versions/v54.0.0/sdk/splash-screen/) | 起動時スプラッシュ画面の制御 | `app/_layout.tsx` |
+| [expo-haptics](https://docs.expo.dev/versions/v54.0.0/sdk/haptics/) | 触覚フィードバック（タップ時の振動） | `components/haptic-tab.tsx`、`app/(tabs)/index.tsx`、`app/day-entries/[date].tsx`、`app/edit-entry/[id].tsx` |
+| [expo-clipboard](https://docs.expo.dev/versions/v54.0.0/sdk/clipboard/) | 日記本文のクリップボードへのコピー | `app/day-entries/[date].tsx` |
+| [expo-document-picker](https://docs.expo.dev/versions/v54.0.0/sdk/document-picker/) | インポートする日記バックアップファイルの選択 | `app/(tabs)/settings.tsx` |
+| [expo-file-system](https://docs.expo.dev/versions/v54.0.0/sdk/filesystem/) | エクスポート用ファイルの書き出し・インポートファイルの読み込み | `app/(tabs)/settings.tsx` |
+| [expo-sharing](https://docs.expo.dev/versions/v54.0.0/sdk/sharing/) | エクスポートした日記ファイルの共有シート表示 | `app/(tabs)/settings.tsx` |
+| [expo-local-authentication](https://docs.expo.dev/versions/v54.0.0/sdk/local-authentication/) | アプリロック解除時の生体認証・端末認証 | `utils/app-lock-authentication.ts` |
+| [expo-notifications](https://docs.expo.dev/versions/v54.0.0/sdk/notifications/) | 日記リマインダーのローカル通知のスケジュール | `utils/diary-reminder-notifications.ts` |
 | [expo-status-bar](https://docs.expo.dev/versions/v54.0.0/sdk/status-bar/) | ステータスバーの見た目の制御 | `app/_layout.tsx` |
-| [expo-symbols](https://docs.expo.dev/versions/v54.0.0/sdk/symbols/) | iOS SF Symbolsの利用 | `components/ui/icon-symbol.ios.tsx` |
-| [expo-system-ui](https://docs.expo.dev/versions/v54.0.0/sdk/system-ui/) | システムUI（背景色など）の制御 | アプリ全体のテーマ設定 |
+| [expo-symbols](https://docs.expo.dev/versions/v54.0.0/sdk/symbols/) | iOS SF Symbolsの利用（他プラットフォームでは型のみ参照） | `components/ui/icon-symbol.ios.tsx`、`components/ui/icon-symbol.tsx` |
 | [expo-web-browser](https://docs.expo.dev/versions/v54.0.0/sdk/webbrowser/) | アプリ内ブラウザでの外部リンク表示 | `components/external-link.tsx` |
+
+### 設定・依存関係として導入しているモジュール
+
+コードから直接 import していないものの、`app.json` の設定や他ライブラリの依存として必要なモジュールです。
+
+| ライブラリ | 用途 | 位置づけ |
+| --- | --- | --- |
+| [expo-splash-screen](https://docs.expo.dev/versions/v54.0.0/sdk/splash-screen/) | 起動時スプラッシュ画面の設定 | `app.json` の `plugins` で画像・背景色を設定する Config Plugin としてのみ使用（`SplashScreen` APIはコードから未使用） |
+| [expo-font](https://docs.expo.dev/versions/v54.0.0/sdk/font/) | フォント読み込み基盤 | `@expo/vector-icons` が必要とする依存。カスタムフォントのロード処理はコードに存在しない |
+| [expo-constants](https://docs.expo.dev/versions/v54.0.0/sdk/constants/) | アプリ設定値・実行時定数の取得 | expo-router が必要とする依存。コードからの直接利用は現状なし |
+| [expo-linking](https://docs.expo.dev/versions/v54.0.0/sdk/linking/) | ディープリンク処理 | expo-router が必要とする依存。コードからの直接利用は現状なし |
+| [expo-system-ui](https://docs.expo.dev/versions/v54.0.0/sdk/system-ui/) | システムUI（ルート背景色・`userInterfaceStyle`）の制御 | `app.json` の `userInterfaceStyle` を反映するための依存。コードからの直接利用は現状なし |
+| [expo-image](https://docs.expo.dev/versions/v54.0.0/sdk/image/) | 高機能な画像表示コンポーネント | 導入済みだがコードから未使用 |
 
 ### 開発・テスト用
 

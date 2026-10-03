@@ -62,15 +62,6 @@ const mockedAppLockAuthentication = require('@/utils/app-lock-authentication') a
   authenticateForAppLockAsync: jest.Mock;
 };
 
-// `AsyncStorage.getItem`は公式モックの時点で既に`jest.fn()`であるため、`jest.spyOn`はこの関数
-// 自体をそのまま返し(新しいラッパーは作らない)、`.mockImplementation(...)`はその関数オブジェクトの
-// 実装を直接書き換える。そのため`mockRestore()`/`jest.restoreAllMocks()`を呼んでも、内部ストレージを
-// 読む本来の実装には戻らず空実装のままになってしまう。差し替え前(モジュール読み込み時点)の
-// 実装を`getMockImplementation()`でスナップショットしておき、個別テストで
-// `jest.spyOn(AsyncStorage, 'getItem').mockImplementation(...)`のように永続的な差し替えを
-// 行った場合に、後続のテストへ影響が漏れないよう明示的に復元できるようにする
-const pristineAsyncStorageGetItemImpl = (AsyncStorage.getItem as jest.Mock).getMockImplementation();
-
 // `AppState.addEventListener`から'change'イベント用に登録されたリスナー関数を取り出し、
 // テスト側から直接呼び出すことでバックグラウンド遷移をシミュレートする
 // (tests/contexts/app-lock-context.test.tsxと同様)。
@@ -202,10 +193,6 @@ describe('RootLayoutのアプリロック画面表示制御', () => {
   const AUTHENTICATE_BUTTON_TEXT = '認証する';
 
   beforeEach(async () => {
-    // 一部のテストが`jest.spyOn(AsyncStorage, 'getItem').mockImplementation(...)`で永続的に
-    // 差し替えるため、`jest.clearAllMocks()`(呼び出し履歴のリセットのみ)より前に
-    // 明示的に元の実装へ戻しておく(上のコメント参照)
-    (AsyncStorage.getItem as jest.Mock).mockImplementation(pristineAsyncStorageGetItemImpl);
     await AsyncStorage.clear();
     jest.clearAllMocks();
     mockedAppLockAuthentication.isAppLockSupportedAsync.mockResolvedValue(true);

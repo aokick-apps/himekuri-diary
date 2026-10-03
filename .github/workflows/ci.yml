@@ -43,8 +43,10 @@ jobs:
           # 上流に修正版が存在しない(first_patched_version: null)ため暫定的に許容する。
           # ビルド時にリポジトリ内の静的な画像アセットの寸法取得にのみ使われ、実行時に
           # ユーザー入力の画像を処理する経路ではないため実害は限定的と判断している。
-          # 詳細・今後の再検討: https://github.com/koji-s-private/react-native-first-app/issues/116
-          ALLOWLIST="GHSA-w3rx-r6r6-pgpr GHSA-5p2g-fcmc-qvqq"
+          # node-forge(@expo/cli経由の署名検証不備)と braces(micromatch経由のスタック枯渇DoS)も
+          # 修正版が未公開のため同様に許容する。いずれもビルド・開発ツール内でのみ使われる。
+          # 詳細・今後の再検討: https://github.com/koji-s-private/react-native-first-app/issues/132
+          ALLOWLIST="GHSA-w3rx-r6r6-pgpr GHSA-5p2g-fcmc-qvqq GHSA-86w9-cpqp-85rv GHSA-vfj7-8cjw-p6xm"
           npm audit --audit-level=high --json > audit-result.json || true
           FOUND=$(jq -r '[.vulnerabilities[].via[]? | select(type=="object") | .url] | unique[]' audit-result.json | grep -oE 'GHSA-[a-z0-9-]+' | sort -u)
           UNKNOWN=$(comm -23 <(echo "$FOUND") <(echo "$ALLOWLIST" | tr ' ' '\n' | sort))
@@ -53,4 +55,4 @@ jobs:
             echo "$UNKNOWN"
             exit 1
           fi
-          echo "許可リスト外の高深刻度脆弱性は検知されませんでした(既知の2件は許容中)。"
+          echo "許可リスト外の高深刻度脆弱性は検知されませんでした(既知の4件は許容中)。"

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, useWindowDimensions } from 'react-native';
+import { AccessibilityInfo, Animated, useWindowDimensions } from 'react-native';
 
 // モーダルのフェード・スライドアニメーション時間(ミリ秒)
 const MODAL_ANIMATION_DURATION_MS = 220;
@@ -14,7 +14,28 @@ export function useModalSlideTransition(isOpen: boolean) {
   const overlayOpacity = useRef(new Animated.Value(isOpen ? 1 : 0)).current;
   const contentTranslateY = useRef(new Animated.Value(isOpen ? 0 : windowHeight)).current;
 
+  // モーション低減設定はアニメーション開始時にだけ参照すればよく、変化しても再生中のアニメーションを
+  // 再起動させたくないためstateではなくrefで保持する(Webはreact-native-webがprefers-reduced-motionへ対応付ける)
+  const reduceMotionRef = useRef(false);
+
   useEffect(() => {
+    let isActive = true;
+    AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
+      if (isActive) {
+        reduceMotionRef.current = enabled;
+      }
+    });
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', (enabled) => {
+      reduceMotionRef.current = enabled;
+    });
+    return () => {
+      isActive = false;
+      subscription?.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    const duration = reduceMotionRef.current ? 0 : MODAL_ANIMATION_DURATION_MS;
     if (isOpen) {
       // 入場アニメーション再生前に描画状態にする(退場時は完了後にfalseへ戻す)
       setIsMounted(true);
@@ -23,12 +44,12 @@ export function useModalSlideTransition(isOpen: boolean) {
     const animation = Animated.parallel([
       Animated.timing(overlayOpacity, {
         toValue: isOpen ? 1 : 0,
-        duration: MODAL_ANIMATION_DURATION_MS,
+        duration,
         useNativeDriver: true,
       }),
       Animated.timing(contentTranslateY, {
         toValue: isOpen ? 0 : windowHeight,
-        duration: MODAL_ANIMATION_DURATION_MS,
+        duration,
         useNativeDriver: true,
       }),
     ]);

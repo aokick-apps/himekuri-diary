@@ -168,5 +168,52 @@ describe('useModalSlideTransition', () => {
       unmount();
       expect(remove).toHaveBeenCalledTimes(1);
     });
+
+    it('falls back to the default duration when isReduceMotionEnabled rejects', async () => {
+      jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockRejectedValue(new Error('fail'));
+      const { rerender } = renderHook(
+        ({ isOpen }: { isOpen: boolean }) => useModalSlideTransition(isOpen),
+        { initialProps: { isOpen: false } },
+      );
+      await act(async () => {});
+      const timingSpy = jest.spyOn(Animated, 'timing');
+
+      act(() => {
+        rerender({ isOpen: true });
+      });
+
+      expect(timingSpy).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ duration: 220 }),
+      );
+    });
+
+    it('ignores the isReduceMotionEnabled result that resolves after unmount', async () => {
+      let resolve: (v: boolean) => void = () => {};
+      jest
+        .spyOn(AccessibilityInfo, 'isReduceMotionEnabled')
+        .mockReturnValue(new Promise<boolean>((r) => (resolve = r)));
+      const { unmount } = renderHook(() => useModalSlideTransition(false));
+
+      unmount();
+      await act(async () => {
+        resolve(true);
+      });
+    });
+
+    it('unmounts after the exit animation completes when reduce motion is enabled (境界値: duration 0)', async () => {
+      jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(true);
+      const { result, rerender } = renderHook(
+        ({ isOpen }: { isOpen: boolean }) => useModalSlideTransition(isOpen),
+        { initialProps: { isOpen: true } },
+      );
+      await act(async () => {});
+
+      act(() => {
+        rerender({ isOpen: false });
+      });
+
+      await waitFor(() => expect(result.current.isMounted).toBe(false));
+    });
   });
 });

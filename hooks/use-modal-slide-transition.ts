@@ -20,11 +20,15 @@ export function useModalSlideTransition(isOpen: boolean) {
 
   useEffect(() => {
     let isActive = true;
-    AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
-      if (isActive) {
-        reduceMotionRef.current = enabled;
-      }
-    });
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((enabled) => {
+        if (isActive) {
+          reduceMotionRef.current = enabled;
+        }
+      })
+      .catch(() => {
+        // 取得失敗時は既定値(false)のままアニメーションを再生する
+      });
     const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', (enabled) => {
       reduceMotionRef.current = enabled;
     });

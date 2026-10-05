@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Modal, Pressable, StyleSheet } from 'react-native';
+import { AccessibilityInfo, Modal, Pressable, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
@@ -12,6 +12,11 @@ import { useThemeColor } from '@/hooks/use-theme-color';
 const CONSECUTIVE_FAILURE_GUIDANCE_THRESHOLD = 3;
 
 const CONTENT_PADDING = 24;
+
+const UNSUPPORTED_GUIDANCE_TEXT =
+  'この端末に登録されている生体認証・パスコードが見つかりません。端末の設定でパスコード等を再設定するか、下のボタンでアプリロックを解除してください。';
+const FAILURE_GUIDANCE_TEXT =
+  '認証に失敗し続ける場合は、端末の設定でパスコード等を再設定してください。';
 
 type AppLockScreenProps = {
   visible: boolean;
@@ -68,6 +73,19 @@ export function AppLockScreen({
 
   const showFailureGuidance = consecutiveFailureCount >= CONSECUTIVE_FAILURE_GUIDANCE_THRESHOLD;
 
+  // フォーカスは認証ボタンに残ったままテキストが出現するため、スクリーンリーダーへ明示的に通知する
+  useEffect(() => {
+    if (visible && !isSupported) {
+      AccessibilityInfo.announceForAccessibility(UNSUPPORTED_GUIDANCE_TEXT);
+    }
+  }, [visible, isSupported]);
+
+  useEffect(() => {
+    if (visible && isSupported && showFailureGuidance) {
+      AccessibilityInfo.announceForAccessibility(FAILURE_GUIDANCE_TEXT);
+    }
+  }, [visible, isSupported, showFailureGuidance]);
+
   return (
     <Modal visible={visible} animationType="none" statusBarTranslucent navigationBarTranslucent>
       <ThemedView
@@ -88,12 +106,12 @@ export function AppLockScreen({
         </ThemedText>
         {!isSupported && (
           <ThemedText style={[styles.guidance, { color: errorColor }]}>
-            この端末に登録されている生体認証・パスコードが見つかりません。端末の設定でパスコード等を再設定するか、下のボタンでアプリロックを解除してください。
+            {UNSUPPORTED_GUIDANCE_TEXT}
           </ThemedText>
         )}
         {isSupported && showFailureGuidance && (
           <ThemedText style={[styles.guidance, { color: errorColor }]}>
-            認証に失敗し続ける場合は、端末の設定でパスコード等を再設定してください。
+            {FAILURE_GUIDANCE_TEXT}
           </ThemedText>
         )}
         {isSupported ? (

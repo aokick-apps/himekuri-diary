@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import React from 'react';
-import { Modal, StyleSheet } from 'react-native';
+import { AccessibilityInfo, Modal, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AppLockScreen } from '@/components/app-lock-screen';
@@ -32,6 +32,16 @@ function getAuthenticateButton() {
 }
 
 describe('AppLockScreen', () => {
+  let announceSpy: jest.SpyInstance;
+
+  beforeEach(() => {
+    announceSpy = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation();
+  });
+
+  afterEach(() => {
+    announceSpy.mockRestore();
+  });
+
   it('renders the Modal with visible=true when the visible prop is true (正常系: 表示制御)', () => {
     render(
       <AppLockScreen
@@ -429,6 +439,67 @@ describe('AppLockScreen', () => {
 
       expect(screen.getByText(UNSUPPORTED_GUIDANCE_TEXT)).toBeTruthy();
       expect(screen.queryByText(FAILURE_GUIDANCE_TEXT)).toBeNull();
+    });
+  });
+
+  describe('スクリーンリーダーへの通知', () => {
+    function renderScreen(isSupported: boolean) {
+      return render(
+        <AppLockScreen
+          visible={true}
+          isSupported={isSupported}
+          onAuthenticate={jest.fn().mockResolvedValue('failure')}
+          onDisableAppLock={jest.fn()}
+        />,
+      );
+    }
+
+    it('announces the failure guidance once when the failure count reaches the threshold (正常系: 連続失敗で通知)', async () => {
+      renderScreen(true);
+
+      for (let i = 0; i < 2; i += 1) {
+        await act(async () => {
+          fireEvent.press(screen.getByText(AUTHENTICATE_BUTTON_TEXT));
+        });
+      }
+      expect(announceSpy).not.toHaveBeenCalled();
+
+      await act(async () => {
+        fireEvent.press(screen.getByText(AUTHENTICATE_BUTTON_TEXT));
+      });
+      expect(announceSpy).toHaveBeenCalledTimes(1);
+      expect(announceSpy).toHaveBeenCalledWith(FAILURE_GUIDANCE_TEXT);
+
+      await act(async () => {
+        fireEvent.press(screen.getByText(AUTHENTICATE_BUTTON_TEXT));
+      });
+      expect(announceSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('announces the unsupported guidance when shown on an unsupported device (正常系: 非対応端末で通知)', () => {
+      renderScreen(false);
+
+      expect(announceSpy).toHaveBeenCalledTimes(1);
+      expect(announceSpy).toHaveBeenCalledWith(UNSUPPORTED_GUIDANCE_TEXT);
+    });
+
+    it('does not announce anything on a supported device before failures (境界値: 通知なし)', () => {
+      renderScreen(true);
+
+      expect(announceSpy).not.toHaveBeenCalled();
+    });
+
+    it('does not announce when the screen is hidden (境界値: 非表示時は通知しない)', () => {
+      render(
+        <AppLockScreen
+          visible={false}
+          isSupported={false}
+          onAuthenticate={jest.fn()}
+          onDisableAppLock={jest.fn()}
+        />,
+      );
+
+      expect(announceSpy).not.toHaveBeenCalled();
     });
   });
 });

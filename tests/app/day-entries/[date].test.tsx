@@ -1253,6 +1253,31 @@ describe('DayEntriesScreen', () => {
       expect(StyleSheet.flatten(saveButton.props.style).opacity).toBe(1);
     });
 
+    it('omits the scroll accessibilityHint when content height equals the max height and removes it once content shrinks back (境界値)', async () => {
+      render(<DayEntriesScreen />);
+      await waitFor(() => expect(mockSetOptions).toHaveBeenCalled());
+      await openNewEntryComposer();
+
+      const input = screen.getByLabelText(NEW_ENTRY_INPUT_LABEL);
+      const { maxHeight } = StyleSheet.flatten(input.props.style);
+      const emitHeight = (height: number) =>
+        fireEvent(screen.getByLabelText(NEW_ENTRY_INPUT_LABEL), 'contentSizeChange', {
+          nativeEvent: { contentSize: { width: 300, height } },
+        });
+
+      emitHeight(maxHeight);
+      expect(screen.getByLabelText(NEW_ENTRY_INPUT_LABEL).props.accessibilityHint).toBeUndefined();
+      expect(screen.queryByText('入力欄内をスクロールできます')).toBeNull();
+
+      emitHeight(maxHeight + 1);
+      expect(screen.getByLabelText(NEW_ENTRY_INPUT_LABEL).props.accessibilityHint).toBe(
+        '長文は入力欄内でスクロールできます',
+      );
+
+      emitHeight(maxHeight);
+      expect(screen.getByLabelText(NEW_ENTRY_INPUT_LABEL).props.accessibilityHint).toBeUndefined();
+    });
+
     describe('本文入力欄の高さ上限(画面サイズへの追従)', () => {
       const originalWindow = Dimensions.get('window');
 

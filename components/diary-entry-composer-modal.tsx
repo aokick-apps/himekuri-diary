@@ -238,7 +238,9 @@ export function DiaryEntryComposerModal({
                   multiline
                   scrollEnabled
                   accessibilityLabel="日記本文"
-                  accessibilityHint="長文は入力欄内でスクロールできます"
+                  accessibilityHint={
+                    isInputScrollable ? '長文は入力欄内でスクロールできます' : undefined
+                  }
                 />
                 {isInputScrollable ? (
                   <ThemedText style={[styles.scrollHint, { color: iconColor }]}>

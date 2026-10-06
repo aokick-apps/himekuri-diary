@@ -1236,11 +1236,15 @@ describe('DayEntriesScreen', () => {
       expect(inputStyle.maxHeight).toBeGreaterThan(inputStyle.minHeight);
       expect(Number.isFinite(inputStyle.maxHeight)).toBe(true);
       expect(screen.queryByText('入力欄内をスクロールできます')).toBeNull();
+      expect(input.props.accessibilityHint).toBeUndefined();
 
       fireEvent(input, 'contentSizeChange', {
         nativeEvent: { contentSize: { width: 300, height: inputStyle.maxHeight + 1 } },
       });
       expect(screen.getByText('入力欄内をスクロールできます')).toBeTruthy();
+      expect(screen.getByLabelText(NEW_ENTRY_INPUT_LABEL).props.accessibilityHint).toBe(
+        '長文は入力欄内でスクロールできます',
+      );
 
       fireEvent.changeText(input, 'あ\n'.repeat(BODY_MAX_LENGTH));
       expect(screen.getByText(`${BODY_MAX_LENGTH}/${BODY_MAX_LENGTH}`)).toBeTruthy();

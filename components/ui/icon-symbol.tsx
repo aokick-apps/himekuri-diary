@@ -25,6 +25,9 @@ const MAPPING = {
   plus: 'add',
 } as IconMapping;
 
+/**
+ * `weight`は型の互換性のためだけに受け付け、使用しない(Material Iconsに太さのバリエーションが無いため)。
+ */
 export function IconSymbol({
   name,
   size = 24,

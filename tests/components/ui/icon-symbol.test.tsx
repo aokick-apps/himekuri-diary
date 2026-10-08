@@ -70,4 +70,11 @@ describe('IconSymbol (Android/Web版フォールバック, MaterialIconsへの�
     const materialIcon = screen.UNSAFE_root.findByProps({ name: 'home' });
     expect(materialIcon.props.size).toBe(24);
   });
+
+  it('does not forward the weight prop to MaterialIcons', () => {
+    render(<IconSymbolFallback name="house.fill" color="#000000" weight="bold" />);
+
+    const materialIcon = screen.UNSAFE_root.findByProps({ name: 'home' });
+    expect(materialIcon.props).not.toHaveProperty('weight');
+  });
 });

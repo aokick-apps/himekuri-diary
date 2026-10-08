@@ -359,8 +359,33 @@ async function waitForInitialLoad() {
   await waitFor(() => expect(screen.UNSAFE_queryAllByType(ActivityIndicator)).toHaveLength(0));
 }
 
+// 実行日(特に月初)によって「10〜20日」が未来日になる等の差が出ないよう、基準日を月の下旬に固定する。
+// タイマーまで偽装すると既存のwaitFor等の挙動が変わるためDateだけを偽装し、時刻は実時間で進める
+const FIXED_TEST_NOW = new Date(2026, 5, 25, 12, 0, 0);
+const NON_DATE_FAKEABLE_APIS = [
+  'hrtime',
+  'nextTick',
+  'performance',
+  'queueMicrotask',
+  'requestAnimationFrame',
+  'cancelAnimationFrame',
+  'requestIdleCallback',
+  'cancelIdleCallback',
+  'setImmediate',
+  'clearImmediate',
+  'setInterval',
+  'clearInterval',
+  'setTimeout',
+  'clearTimeout',
+] as const;
+
 describe('HomeScreen', () => {
   beforeEach(async () => {
+    jest.useFakeTimers({
+      now: FIXED_TEST_NOW,
+      advanceTimers: true,
+      doNotFake: [...NON_DATE_FAKEABLE_APIS],
+    });
     await AsyncStorage.clear();
     secureStoreMock.__reset();
     jest.clearAllMocks();
@@ -383,6 +408,7 @@ describe('HomeScreen', () => {
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 60));
     });
+    jest.useRealTimers();
   });
 
   it('renders the diary title', async () => {
@@ -3753,6 +3779,8 @@ describe('HomeScreen', () => {
     });
 
     it("sets maxFontSizeMultiplier on today's badge day number", async () => {
+      // 「今日」の判定はreact-native-calendars側がモジュール読み込み時点の実Dateで行うため、実時刻に戻す
+      jest.useRealTimers();
       const now = new Date();
 
       render(<HomeScreen />);

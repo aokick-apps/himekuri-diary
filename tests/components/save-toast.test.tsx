@@ -2,7 +2,35 @@ import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import React from 'react';
 import { AccessibilityInfo, StyleSheet } from 'react-native';
 
-import { SaveToast } from '@/components/save-toast';
+import {
+  SAVE_TOAST_TEXT_COLOR,
+  SaveToast,
+  VARIANT_BACKGROUND_COLORS,
+} from '@/components/save-toast';
+
+// WCAG 2.xの相対輝度・コントラスト比の定義に従って算出する
+function relativeLuminance(hex: string): number {
+  const normalized = hex.replace('#', '');
+  const fullHex =
+    normalized.length === 3
+      ? normalized
+          .split('')
+          .map((c) => c + c)
+          .join('')
+      : normalized;
+  const [r, g, b] = [0, 2, 4].map((i) => {
+    const channel = parseInt(fullHex.slice(i, i + 2), 16) / 255;
+    return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+function contrastRatio(foreground: string, background: string): number {
+  const [lighter, darker] = [relativeLuminance(foreground), relativeLuminance(background)].sort(
+    (a, b) => b - a,
+  );
+  return (lighter + 0.05) / (darker + 0.05);
+}
 
 describe('SaveToast', () => {
   beforeEach(() => {
@@ -49,7 +77,23 @@ describe('SaveToast', () => {
     );
 
     const toast = screen.getByTestId('save-toast');
-    expect(StyleSheet.flatten(toast.props.style).backgroundColor).toBe('#e65100');
+    expect(StyleSheet.flatten(toast.props.style).backgroundColor).toBe('#bf360c');
+  });
+
+  it.each(['success', 'warning'] as const)(
+    'keeps the "%s" background at WCAG AA contrast (4.5:1 or higher) against the white text',
+    (variant) => {
+      expect(
+        contrastRatio(SAVE_TOAST_TEXT_COLOR, VARIANT_BACKGROUND_COLORS[variant]),
+      ).toBeGreaterThanOrEqual(4.5);
+    },
+  );
+
+  it('computes contrast ratios that match known WCAG reference values (境界値: 算出ロジックの検証)', () => {
+    expect(contrastRatio('#fff', '#000')).toBeCloseTo(21, 5);
+    expect(contrastRatio('#fff', '#fff')).toBeCloseTo(1, 5);
+    // 白文字に対して基準を満たさない色は4.5未満と判定される
+    expect(contrastRatio('#fff', '#e65100')).toBeLessThan(4.5);
   });
 
   it('exposes accessibilityLiveRegion="polite" so screen readers announce the state change', () => {

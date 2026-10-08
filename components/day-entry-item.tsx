@@ -38,12 +38,16 @@ export function DayEntryItem({
       ]}
       accessibilityHint={isHighlighted ? '検索で見つかった日記です' : undefined}
     >
-      <View style={styles.entryHeader}>
-        <ThemedText style={styles.entryDate}>{formatEntryDateTime(entry.createdAt)}</ThemedText>
-        <View style={styles.entryActions}>
+      <ThemedText style={styles.entryDate}>{formatEntryDateTime(entry.createdAt)}</ThemedText>
+      <ThemedText>{entry.text}</ThemedText>
+      {isDiaryImageAttachmentSupported()
+        ? entry.images?.map((image) => <DiaryImagePreview key={image.fileName} image={image} />)
+        : null}
+      <View style={styles.entryActions}>
+        <View style={styles.mainActions}>
           <Pressable
             onPress={() => onCopy(entry)}
-            hitSlop={8}
+            style={styles.actionButton}
             accessibilityRole="button"
             accessibilityLabel="日記本文をコピー"
           >
@@ -51,26 +55,22 @@ export function DayEntryItem({
           </Pressable>
           <Pressable
             onPress={() => onEdit(entry)}
-            hitSlop={8}
+            style={styles.actionButton}
             accessibilityRole="button"
             accessibilityLabel="この日記を編集"
           >
             <ThemedText style={[styles.entryActionText, { color: tintColor }]}>編集</ThemedText>
           </Pressable>
-          <Pressable
-            onPress={() => onDelete(entry)}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="この日記を削除"
-          >
-            <ThemedText style={[styles.entryActionText, { color: errorColor }]}>削除</ThemedText>
-          </Pressable>
         </View>
+        <Pressable
+          onPress={() => onDelete(entry)}
+          style={[styles.actionButton, styles.deleteButton]}
+          accessibilityRole="button"
+          accessibilityLabel="この日記を削除"
+        >
+          <ThemedText style={[styles.entryActionText, { color: errorColor }]}>削除</ThemedText>
+        </Pressable>
       </View>
-      <ThemedText>{entry.text}</ThemedText>
-      {isDiaryImageAttachmentSupported()
-        ? entry.images?.map((image) => <DiaryImagePreview key={image.fileName} image={image} />)
-        : null}
     </ThemedView>
   );
 }
@@ -86,18 +86,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     borderRadius: 8,
   },
-  entryHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
   entryDate: {
     fontSize: 12,
     opacity: 0.6,
   },
+  // 削除は破壊的な操作のため、コピー・編集とは行の反対端へ離して誤タップを防ぐ
   entryActions: {
     flexDirection: 'row',
-    gap: 16,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  // 各ボタンの横余白ぶん、テキストが本文の左端と揃うよう外側へ寄せる
+  mainActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: -12,
+  },
+  deleteButton: {
+    marginRight: -12,
+  },
+  actionButton: {
+    minWidth: 44,
+    minHeight: 44,
+    paddingHorizontal: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   entryActionText: {
     fontSize: 14,

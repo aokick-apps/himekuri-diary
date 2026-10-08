@@ -83,6 +83,12 @@ function Host({
   );
 }
 
+// 下書きの読み込み完了後に起きる非同期のstate更新までactで消化し、テスト終了後の更新を残さない
+async function waitForDraftRestored() {
+  await waitFor(() => expect(loadDraftTextMock).toHaveBeenCalled());
+  await act(async () => {});
+}
+
 describe('DiaryEntryComposerModal', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -100,7 +106,7 @@ describe('DiaryEntryComposerModal', () => {
 
   it('renders a transparent Modal that extends under the status bar and navigation bar, so the overlay covers the whole screen', async () => {
     render(<DiaryEntryComposerModal {...defaultProps} />);
-    await waitFor(() => expect(loadDraftTextMock).toHaveBeenCalled());
+    await waitForDraftRestored();
 
     const modal = screen.UNSAFE_getByType(Modal);
     expect(modal.props.transparent).toBe(true);
@@ -110,7 +116,7 @@ describe('DiaryEntryComposerModal', () => {
 
   it('keeps the input text while the exit animation is running and resets it after unmounting', async () => {
     const view = render(<DiaryEntryComposerModal {...defaultProps} />);
-    await waitFor(() => expect(loadDraftTextMock).toHaveBeenCalled());
+    await waitForDraftRestored();
     fireEvent.changeText(screen.getByLabelText('日記本文'), '入力中の本文');
 
     view.rerender(<DiaryEntryComposerModal {...defaultProps} dateKey={null} />);
@@ -123,6 +129,7 @@ describe('DiaryEntryComposerModal', () => {
     // 再度開くと、初期化済みの空の入力欄になっている
     mockIsTransitionMounted = true;
     view.rerender(<DiaryEntryComposerModal {...defaultProps} dateKey="2026-09-20" />);
+    await waitForDraftRestored();
     expect(screen.getByLabelText('日記本文').props.value).toBe('');
   });
 
@@ -165,7 +172,7 @@ describe('DiaryEntryComposerModal', () => {
     });
 
     render(<DiaryEntryComposerModal {...defaultProps} />);
-    await waitFor(() => expect(loadDraftTextMock).toHaveBeenCalled());
+    await waitForDraftRestored();
 
     expect(screen.getByText('保存中...')).toBeTruthy();
     expect(screen.queryByText('保存')).toBeNull();
@@ -181,7 +188,7 @@ describe('DiaryEntryComposerModal', () => {
         <DiaryEntryComposerModal {...defaultProps} />
       </StrictMode>,
     );
-    await waitFor(() => expect(loadDraftTextMock).toHaveBeenCalled());
+    await waitForDraftRestored();
 
     fireEvent.changeText(screen.getByLabelText('日記本文'), '保存する本文');
     fireEvent.press(screen.getByRole('button', { name: '保存' }));
@@ -390,7 +397,7 @@ describe('DiaryEntryComposerModal', () => {
         uri: 'file:///tmp/new.jpg',
       });
       render(<DiaryEntryComposerModal {...defaultProps} />);
-      await waitFor(() => expect(loadDraftTextMock).toHaveBeenCalled());
+      await waitForDraftRestored();
       await act(async () => {
         fireEvent.press(screen.getByRole('button', { name: '写真を添付' }));
       });
@@ -448,7 +455,7 @@ describe('DiaryEntryComposerModal', () => {
 
   it('links the body input to the keyboard accessory that offers a "完了" button to close the keyboard (正常系)', async () => {
     render(<DiaryEntryComposerModal {...defaultProps} />);
-    await waitFor(() => expect(loadDraftTextMock).toHaveBeenCalled());
+    await waitForDraftRestored();
 
     expect(screen.getByLabelText('日記本文').props.inputAccessoryViewID).toBe(
       COMPOSER_INPUT_ACCESSORY_ID,

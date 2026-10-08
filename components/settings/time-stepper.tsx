@@ -64,6 +64,8 @@ export function TimeStepper({
         <ThemedText style={[styles.buttonText, { color: tintColor }]}>−</ThemedText>
       </Pressable>
       <ThemedText
+        // 値が変わっても桁の幅が揺れないよう等幅フォントで表示する
+        font="mono"
         accessibilityLabel={`${label} ${formattedValue}`}
         accessibilityLiveRegion={Platform.OS === 'android' ? 'polite' : undefined}
         style={[styles.value, { opacity: disabled ? 0.4 : 1 }]}

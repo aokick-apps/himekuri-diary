@@ -3,10 +3,14 @@ import { StyleSheet, Text, type TextProps } from 'react-native';
 import { Fonts } from '@/constants/theme';
 import { useThemeColor } from '@/hooks/use-theme-color';
 
+export type ThemedTextFont = keyof typeof Fonts;
+
 export type ThemedTextProps = TextProps & {
   lightColor?: string;
   darkColor?: string;
   type?: 'default' | 'title' | 'defaultSemiBold' | 'subtitle' | 'link';
+  // 文字サイズ・太さ(type)とは独立に書体だけを差し替える。未指定時は各typeの既定(sans)
+  font?: ThemedTextFont;
 };
 
 export function ThemedText({
@@ -14,6 +18,7 @@ export function ThemedText({
   lightColor,
   darkColor,
   type = 'default',
+  font,
   ...rest
 }: ThemedTextProps) {
   const color = useThemeColor({ light: lightColor, dark: darkColor }, 'text');
@@ -29,6 +34,7 @@ export function ThemedText({
         type === 'defaultSemiBold' ? styles.defaultSemiBold : undefined,
         type === 'subtitle' ? styles.subtitle : undefined,
         type === 'link' ? styles.link : undefined,
+        font ? { fontFamily: Fonts[font] } : undefined,
         style,
       ]}
       {...rest}

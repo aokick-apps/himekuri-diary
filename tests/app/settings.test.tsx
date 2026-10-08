@@ -19,7 +19,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import SettingsScreen from '@/app/(tabs)/settings';
 import { TAB_SCREEN_CONTAINER_SAFE_AREA_TEST_ID } from '@/components/tab-screen-container';
 import { SETTINGS_SECTIONS } from '@/constants/settings-menu';
-import { Colors } from '@/constants/theme';
+import { Colors, Fonts } from '@/constants/theme';
 import { AppLockProvider } from '@/contexts/app-lock-context';
 import {
   CALENDAR_LAYOUT_PREFERENCE_STORAGE_KEY,
@@ -2102,6 +2102,15 @@ describe('リマインダーセクション(日記を書く習慣化のための
     });
 
     expect(screen.getByLabelText('時 00')).toBeTruthy();
+  });
+
+  it('renders the hour/minute values in the monospace font so the digit width stays stable while stepping (表示: 等幅フォント)', async () => {
+    renderSettingsScreen();
+
+    for (const label of ['時 21', '分 00']) {
+      const value = await screen.findByLabelText(label);
+      expect(StyleSheet.flatten(value.props.style).fontFamily).toBe(Fonts.mono);
+    }
   });
 
   it('exposes the changed stepper value as a polite live region on Android without using the iOS announcement API', async () => {

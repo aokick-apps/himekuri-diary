@@ -90,4 +90,37 @@ describe('ThemedText', () => {
     // デフォルトtypeのスタイルも維持されたままであること
     expect(flattened.fontSize).toBe(16);
   });
+
+  it.each(['sans', 'serif', 'rounded', 'mono'] as const)(
+    'switches only the font family to Fonts.%s when the font prop is given (正常系: 書体の選択)',
+    (font) => {
+      render(
+        <ThemedText type="subtitle" font={font}>
+          本文
+        </ThemedText>,
+      );
+
+      const flattened = StyleSheet.flatten(screen.getByText('本文').props.style);
+      expect(flattened.fontFamily).toBe(Fonts[font]);
+      // typeによる文字サイズ・太さはそのまま維持される
+      expect(flattened.fontSize).toBe(20);
+      expect(flattened.fontWeight).toBe('bold');
+    },
+  );
+
+  it('keeps Fonts.sans when the font prop is omitted (境界値: 未指定)', () => {
+    render(<ThemedText type="title">本文</ThemedText>);
+
+    expect(StyleSheet.flatten(screen.getByText('本文').props.style).fontFamily).toBe(Fonts.sans);
+  });
+
+  it('lets a caller-provided style fontFamily take precedence over the font prop (境界値: styleによる上書き)', () => {
+    render(
+      <ThemedText font="mono" style={{ fontFamily: 'CustomFont' }}>
+        本文
+      </ThemedText>,
+    );
+
+    expect(StyleSheet.flatten(screen.getByText('本文').props.style).fontFamily).toBe('CustomFont');
+  });
 });

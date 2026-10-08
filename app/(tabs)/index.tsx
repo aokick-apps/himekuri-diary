@@ -96,7 +96,7 @@ function getPickerMaxMonthIndex(today: Date): number {
 }
 
 // 日記が無い月にも過去日の日記を書けるよう、カレンダー・年月ピッカーの下限は最古の日記の月に
-// かかわらず、少なくとも今年を含めてこの年数分の1月まで遡れるようにする
+// かかわらず、少なくとも今年からこの年数分さかのぼった年の1月まで遡れるようにする
 const CALENDAR_MIN_YEARS_BACK = 10;
 
 function getPickerMinMonthIndex(entries: DiaryEntry[], pickerMaxMonthIndex: number): number {
@@ -1088,7 +1088,6 @@ export default function HomeScreen() {
                     maxDate={toDateKey(new Date())}
                     // 年月ピッカーで選択可能な最古月より過去へスワイプできてしまうと、
                     // ピッカーのクランプ処理と表示中の月が食い違うため下限を揃える
-                    // (下限自体は過去日の日記を書けるよう十分に過去へ取っている)
                     minDate={getFirstDayOfMonthKey(
                       pickerMinYear,
                       getMonthFromMonthIndex(pickerMinMonthIndex),

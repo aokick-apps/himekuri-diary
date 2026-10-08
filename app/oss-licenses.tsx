@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { FlatList, StyleSheet, TextInput } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { AccessibilityInfo, FlatList, StyleSheet, TextInput } from 'react-native';
 
 import { ExternalLink } from '@/components/external-link';
 import { ThemedText } from '@/components/themed-text';
@@ -19,6 +19,8 @@ type LicenseEntry = {
 // 依存関係を追加・更新した際は、このコマンドを再実行して最新の内容にしてから差分をコミットする。
 const licenseEntries = licenses as LicenseEntry[];
 
+const ANNOUNCE_DEBOUNCE_MS = 500;
+
 export default function OssLicensesScreen() {
   const [query, setQuery] = useState('');
   const textColor = useThemeColor({}, 'text');
@@ -33,6 +35,18 @@ export default function OssLicensesScreen() {
     return licenseEntries.filter((entry) => entry.name.toLowerCase().includes(keyword));
   }, [query]);
   const isFiltering = query.trim().length > 0;
+  const resultCountText = `${filteredEntries.length}件 / 全${licenseEntries.length}件`;
+
+  // 入力が止まってから1回だけ読み上げる(iOSのVoiceOverはライブリージョンが効かないため)
+  useEffect(() => {
+    if (!isFiltering) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      AccessibilityInfo.announceForAccessibility(resultCountText);
+    }, ANNOUNCE_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [isFiltering, resultCountText]);
 
   return (
     <ThemedView style={styles.container}>
@@ -48,9 +62,7 @@ export default function OssLicensesScreen() {
               このアプリは以下のオープンソースソフトウェア(OSS)を利用しています。
             </ThemedText>
             <ThemedText style={styles.count} accessibilityLiveRegion="polite">
-              {isFiltering
-                ? `${filteredEntries.length}件 / 全${licenseEntries.length}件`
-                : `全${licenseEntries.length}件`}
+              {isFiltering ? resultCountText : `全${licenseEntries.length}件`}
             </ThemedText>
             <TextInput
               style={[styles.searchInput, { color: textColor, borderColor: iconColor }]}
@@ -106,6 +118,7 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   searchInput: {
+    minHeight: 44,
     borderWidth: 1,
     borderRadius: 8,
     paddingVertical: 8,

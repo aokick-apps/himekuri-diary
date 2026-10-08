@@ -1,7 +1,8 @@
+import { HeaderHeightContext } from '@react-navigation/elements';
 import type { NavigationAction } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -15,11 +16,13 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DiaryImageAttachmentField } from '@/components/diary-image-attachment-field';
+import { KeyboardDoneAccessory } from '@/components/keyboard-done-accessory';
 import { SaveToast } from '@/components/save-toast';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { SAVE_SUCCESS_MESSAGE } from '@/constants/diary-messages';
 import { useDraftAutoSave } from '@/hooks/use-draft-auto-save';
+import { useKeyboardVisible } from '@/hooks/use-keyboard-visible';
 import { useSaveDiaryEntry } from '@/hooks/use-save-diary-entry';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { DIARY_EDIT_DRAFT_STORAGE_KEY_PREFIX, loadDraftText } from '@/utils/diary-draft-storage';
@@ -43,6 +46,8 @@ import {
 // 遷移が早すぎると保存できたかを確認できないため、トーストを読める長さだけ画面に留める
 const NAVIGATE_BACK_DELAY_AFTER_SAVE_MS = 1200;
 
+export const EDIT_ENTRY_INPUT_ACCESSORY_ID = 'edit-entry-body-accessory';
+
 // 日記1件を編集する専用画面。未保存の変更を持ったまま離れようとした場合の破棄確認は、
 // ヘッダーの戻る操作・物理戻るボタン・スワイプのいずれでも検知できる`beforeRemove`イベントで実現する
 export default function EditEntryScreen() {
@@ -50,6 +55,10 @@ export default function EditEntryScreen() {
   const router = useRouter();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+  // KeyboardAvoidingViewは自身の位置を考慮しないため、Stackのヘッダーの高さ分だけ余分に持ち上げないと
+  // 保存ボタンがキーボードの裏に隠れる
+  const headerHeight = useContext(HeaderHeightContext) ?? 0;
+  const isKeyboardVisible = useKeyboardVisible();
 
   const [isLoaded, setIsLoaded] = useState(false);
   const [isLoadFailed, setIsLoadFailed] = useState(false);
@@ -328,9 +337,14 @@ export default function EditEntryScreen() {
     <KeyboardAvoidingView
       style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight : 0}
     >
       <ThemedView
-        style={[styles.container, { paddingBottom: 16 + insets.bottom }]}
+        style={[
+          styles.container,
+          // キーボード表示中は下端のセーフエリアをキーボードが覆うため、その分の余白は取らない
+          { paddingBottom: 16 + (isKeyboardVisible ? 0 : insets.bottom) },
+        ]}
         testID="edit-entry-container"
       >
         <TextInput
@@ -339,6 +353,7 @@ export default function EditEntryScreen() {
           onChangeText={handleChangeEditDraft}
           multiline
           editable={!isSavingEdit}
+          inputAccessoryViewID={EDIT_ENTRY_INPUT_ACCESSORY_ID}
           accessibilityLabel="日記本文"
           // 他の本文入力欄と同様、grapheme単位の切り詰めをonChangeText側で行うため
           // maxLength propはあえて指定しない
@@ -397,6 +412,7 @@ export default function EditEntryScreen() {
           />
         ) : null}
       </ThemedView>
+      <KeyboardDoneAccessory nativeID={EDIT_ENTRY_INPUT_ACCESSORY_ID} />
     </KeyboardAvoidingView>
   );
 }

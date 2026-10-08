@@ -2,11 +2,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import React from 'react';
 import { Alert } from 'react-native';
 
-import {
-  DiaryImageAttachmentField,
-  IMAGE_PERMISSION_DENIED_MESSAGE,
-  IMAGE_PERMISSION_DENIED_TITLE,
-} from '@/components/diary-image-attachment-field';
+import { DiaryImageAttachmentField } from '@/components/diary-image-attachment-field';
 import type { DiaryImageDraft } from '@/utils/diary-images';
 
 jest.mock('@/utils/diary-images', () => ({
@@ -86,22 +82,6 @@ describe('DiaryImageAttachmentField', () => {
     fireEvent.press(screen.getByRole('button', { name: '添付した写真を削除する' }));
 
     expect(onChange).toHaveBeenCalledWith([]);
-  });
-
-  it('explains how to allow access instead of crashing when photo access is denied (異常系: 権限拒否)', async () => {
-    mockedDiaryImages.pickDiaryImageAsync.mockResolvedValue({ status: 'denied' });
-    const onChange = jest.fn();
-    render(<DiaryImageAttachmentField drafts={[]} onChange={onChange} />);
-
-    await act(async () => {
-      fireEvent.press(screen.getByRole('button', { name: '写真を添付' }));
-    });
-
-    expect(Alert.alert).toHaveBeenCalledWith(
-      IMAGE_PERMISSION_DENIED_TITLE,
-      IMAGE_PERMISSION_DENIED_MESSAGE,
-    );
-    expect(onChange).not.toHaveBeenCalled();
   });
 
   it('does nothing when picking is canceled (境界値: キャンセル)', async () => {

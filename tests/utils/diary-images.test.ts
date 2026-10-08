@@ -117,28 +117,22 @@ describe('isDiaryImageAttachmentSupported', () => {
 });
 
 describe('pickDiaryImageAsync', () => {
-  it('returns "denied" without opening the library when access is not granted (異常系: 権限拒否)', async () => {
-    mockedImagePicker.requestMediaLibraryPermissionsAsync.mockResolvedValue({
-      granted: false,
-    } as ImagePicker.MediaLibraryPermissionResponse);
+  it('opens the library without requesting access to the whole photo library (正常系: 権限を求めない)', async () => {
+    mockedImagePicker.launchImageLibraryAsync.mockResolvedValue({ canceled: true, assets: null });
 
-    await expect(pickDiaryImageAsync()).resolves.toEqual({ status: 'denied' });
-    expect(mockedImagePicker.launchImageLibraryAsync).not.toHaveBeenCalled();
+    await pickDiaryImageAsync();
+
+    expect(mockedImagePicker.requestMediaLibraryPermissionsAsync).not.toHaveBeenCalled();
+    expect(mockedImagePicker.launchImageLibraryAsync).toHaveBeenCalledTimes(1);
   });
 
   it('returns "canceled" when the user closes the library without choosing (境界値: キャンセル)', async () => {
-    mockedImagePicker.requestMediaLibraryPermissionsAsync.mockResolvedValue({
-      granted: true,
-    } as ImagePicker.MediaLibraryPermissionResponse);
     mockedImagePicker.launchImageLibraryAsync.mockResolvedValue({ canceled: true, assets: null });
 
     await expect(pickDiaryImageAsync()).resolves.toEqual({ status: 'canceled' });
   });
 
   it('opens the library for a single image and returns its uri (正常系)', async () => {
-    mockedImagePicker.requestMediaLibraryPermissionsAsync.mockResolvedValue({
-      granted: true,
-    } as ImagePicker.MediaLibraryPermissionResponse);
     mockedImagePicker.launchImageLibraryAsync.mockResolvedValue({
       canceled: false,
       assets: [{ uri: 'file:///tmp/picked.png', width: 10, height: 10 }],

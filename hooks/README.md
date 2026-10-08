@@ -10,6 +10,7 @@ hooks/
   use-color-scheme.web.ts        ↑のWeb向け実装（静的レンダリング対応）
   use-theme-color.ts             カラースキームに応じたテーマカラーを取得するフック
   use-modal-slide-transition.ts  背景オーバーレイのフェード・コンテンツのスライドインを制御するモーダル用アニメーションフック
+  use-keyboard-visible.ts        キーボードが表示中かどうかを返すフック
   use-month-navigation.ts        ホーム画面の月表示カレンダーで表示中の年月・年月ピッカーの状態と移動可能範囲を管理するフック
   use-diary-search.ts            ホーム画面の日記検索の入力値と検索結果(新しい順)を管理するフック
   use-save-diary-entry.ts        日記保存処理（バリデーション・保存中フラグ・エラーハンドリング）を共通化するフック

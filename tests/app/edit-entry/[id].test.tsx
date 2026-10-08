@@ -3,9 +3,10 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-
 import * as Haptics from 'expo-haptics';
 import * as SecureStore from 'expo-secure-store';
 import React from 'react';
-import { Alert, StyleSheet } from 'react-native';
+import { HeaderHeightContext } from '@react-navigation/elements';
+import { Alert, Keyboard, KeyboardAvoidingView, StyleSheet } from 'react-native';
 
-import EditEntryScreen from '@/app/edit-entry/[id]';
+import EditEntryScreen, { EDIT_ENTRY_INPUT_ACCESSORY_ID } from '@/app/edit-entry/[id]';
 import { decryptText, encryptText, getOrCreateEncryptionKey } from '@/utils/diary-encryption';
 import {
   buildDiaryEntryKey,
@@ -1827,6 +1828,57 @@ describe('EditEntryScreen', () => {
 
       expect(preventDefault).not.toHaveBeenCalled();
       expect(Alert.alert).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('キーボード表示中の保存ボタン', () => {
+    async function seedAndRender(element: React.ReactElement) {
+      await seedDiaryEntry({ id: ENTRY_ID, text: '本文', createdAt: '2026-01-01T00:00:00.000Z' });
+      render(element);
+      await screen.findByDisplayValue('本文');
+    }
+
+    it('lifts the content by the Stack header height so the save button stays above the keyboard (正常系)', async () => {
+      await seedAndRender(
+        <HeaderHeightContext.Provider value={100}>
+          <EditEntryScreen />
+        </HeaderHeightContext.Provider>,
+      );
+
+      expect(screen.UNSAFE_getByType(KeyboardAvoidingView).props.keyboardVerticalOffset).toBe(100);
+    });
+
+    it('falls back to no offset when there is no header (境界値: ヘッダーなし)', async () => {
+      await seedAndRender(<EditEntryScreen />);
+
+      expect(screen.UNSAFE_getByType(KeyboardAvoidingView).props.keyboardVerticalOffset).toBe(0);
+    });
+
+    it('drops the bottom safe-area padding only while the keyboard is shown, since the keyboard covers that area (正常系: 余白の二重取り防止)', async () => {
+      mockSafeAreaBottom = 34;
+      jest.spyOn(Keyboard, 'addListener');
+      await seedAndRender(<EditEntryScreen />);
+      const container = screen.getByTestId('edit-entry-container');
+      const paddingWithoutKeyboard = StyleSheet.flatten(container.props.style).paddingBottom;
+
+      const showListener = (Keyboard.addListener as jest.Mock).mock.calls.find(
+        ([eventName]) => eventName === 'keyboardWillShow',
+      )?.[1];
+      act(() => showListener());
+
+      expect(
+        StyleSheet.flatten(screen.getByTestId('edit-entry-container').props.style).paddingBottom,
+      ).toBe(16);
+      expect(paddingWithoutKeyboard).toBe(16 + 34);
+    });
+
+    it('links the body input to the keyboard accessory that offers a "完了" button to close the keyboard (正常系)', async () => {
+      await seedAndRender(<EditEntryScreen />);
+
+      expect(screen.getByLabelText('日記本文').props.inputAccessoryViewID).toBe(
+        EDIT_ENTRY_INPUT_ACCESSORY_ID,
+      );
+      expect(screen.getByRole('button', { name: 'キーボードを閉じる' })).toBeTruthy();
     });
   });
 });

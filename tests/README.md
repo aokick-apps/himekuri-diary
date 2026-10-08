@@ -8,13 +8,18 @@
 tests/
   app/
     _layout.test.tsx      app/_layout.tsx（アプリ全体のレイアウト・オンボーディング表示制御）のテスト
-    index.test.tsx      app/(tabs)/index.tsx（日記画面）のテスト
+    home/               app/(tabs)/index.tsx（日記画面）のテストを機能ごとに分割したもの
+                        （save / draft-autosave / save-feedback / empty-state / calendar-modal /
+                        year-month-picker / day-indicators / new-entry-modal / search / week-layout など）
     settings.test.tsx      app/(tabs)/settings.tsx（設定画面）のテスト
     oss-licenses.test.tsx など   app/oss-licenses.tsx（OSSライセンス画面）のテスト
     day-entries/
       [date].test.tsx   app/day-entries/[date].tsx（日付ごとの日記一覧画面）のテスト
     edit-entry/
       [id].test.tsx     app/edit-entry/[id].tsx（日記編集画面）のテスト
+  helpers/
+    home-screen-mocks.ts        日記画面テスト共通のjest.mockファクトリ(各テストファイルのjest.mockから呼び出す)
+    home-screen-test-utils.tsx  日記画面テスト共通のヘルパー・定数・beforeEach/afterEach(setupHomeScreenLifecycle)
   components/
     onboarding.test.tsx    components/onboarding.tsx（初回起動時のオンボーディング画面）のテスト
     save-toast.test.tsx    components/save-toast.tsx（保存成功時に表示する一時的なトースト）のテスト
@@ -63,7 +68,7 @@ npm test
 - `expo-crypto`: Node標準の `crypto` モジュール（`crypto.randomBytes` / `crypto.randomUUID`）で代替し、実際に乱数として振る舞うようにする。
 - `expo-secure-store`: インメモリの `Record<string, string>` で `getItemAsync` / `setItemAsync` / `deleteItemAsync` を実装し、テスト間の状態分離のための `__reset()` ヘルパーを追加する。
 
-具体的な実装は [tests/utils/diary-encryption.test.ts](utils/diary-encryption.test.ts) と [tests/app/index.test.tsx](app/index.test.tsx) を参照してください。
+具体的な実装は [tests/utils/diary-encryption.test.ts](utils/diary-encryption.test.ts) と [tests/app/home/save.test.tsx](app/home/save.test.tsx) を参照してください。
 
 ### expo-notifications のモックについて
 

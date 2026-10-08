@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react-native';
 import React from 'react';
 
-import { IconSymbol } from '@/components/ui/icon-symbol';
+import { IconSymbol, type IconSymbolName } from '@/components/ui/icon-symbol';
 
 // jest-expo(react-native)のhasteはデフォルトプラットフォームが'ios'のため、拡張子を指定しない
 // `@/components/ui/icon-symbol`は`icon-symbol.ios.tsx`(expo-symbolsのSymbolViewをそのまま使う版)に
@@ -69,6 +69,16 @@ describe('IconSymbol (Android/Web版フォールバック, MaterialIconsへの�
 
     const materialIcon = screen.UNSAFE_root.findByProps({ name: 'home' });
     expect(materialIcon.props.size).toBe(24);
+  });
+
+  it('rejects SF Symbol names that are not registered in the mapping at compile time', () => {
+    // 未登録の名前を渡すと実行時にアイコンが表示されないため、型チェック(tsc)の段階で弾けることを担保する
+    // @ts-expect-error 'doc.text'はMAPPINGに未登録
+    const unregistered: IconSymbolName = 'doc.text';
+    const registered: IconSymbolName = 'plus';
+
+    expect(unregistered).toBe('doc.text');
+    expect(registered).toBe('plus');
   });
 
   it('does not forward the weight prop to MaterialIcons', () => {

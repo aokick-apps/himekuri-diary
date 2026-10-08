@@ -1,61 +1,47 @@
 import { randomUUID } from 'expo-crypto';
 import * as Haptics from 'expo-haptics';
 import { useFocusEffect, useRouter } from 'expo-router';
-import type { ComponentProps } from 'react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Animated,
-  FlatList,
   Keyboard,
   KeyboardAvoidingView,
-  Modal,
-  PanResponder,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   TextInput,
-  useWindowDimensions,
   View,
 } from 'react-native';
-import type { CalendarProps, DateData } from 'react-native-calendars';
-import { Calendar, LocaleConfig } from 'react-native-calendars';
+import type { DateData } from 'react-native-calendars';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { DiaryEntryComposerModal } from '@/components/diary-entry-composer-modal';
+import { DiarySearchInput, DiarySearchResults } from '@/components/home/diary-search';
+import { MonthCalendar } from '@/components/home/month-calendar';
+import { MonthPickerModal } from '@/components/home/month-picker-modal';
+import { WeekCalendarView } from '@/components/home/week-calendar-view';
 import { SaveToast } from '@/components/save-toast';
 import { TabScreenContainer } from '@/components/tab-screen-container';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { SAVE_SUCCESS_MESSAGE } from '@/constants/diary-messages';
+import {
+  EMPTY_STATE_MESSAGE_MONTH,
+  EMPTY_STATE_MESSAGE_WEEK,
+  SAVE_SUCCESS_MESSAGE,
+} from '@/constants/diary-messages';
 import { useCalendarLayoutPreference } from '@/contexts/calendar-layout-preference-context';
-import { useThemePreference } from '@/contexts/theme-preference-context';
 import { useDraftAutoSave } from '@/hooks/use-draft-auto-save';
 import { useDraftRestore } from '@/hooks/use-draft-restore';
-import { useModalSlideTransition } from '@/hooks/use-modal-slide-transition';
+import { useDiarySearch } from '@/hooks/use-diary-search';
+import { useMonthNavigation } from '@/hooks/use-month-navigation';
 import { useSaveDiaryEntry } from '@/hooks/use-save-diary-entry';
 import { useThemeColor } from '@/hooks/use-theme-color';
-import {
-  buildCreatedAtForDateKeyAtTime,
-  dateKeyToDate,
-  formatDateHeading,
-  getSwipeDayDelta,
-  getWeekDays,
-  toDateKey,
-} from '@/utils/diary-date';
+import { buildCreatedAtForDateKeyAtTime, toDateKey } from '@/utils/diary-date';
 import {
   DIARY_DRAFT_STORAGE_KEY,
   DIARY_NEW_ENTRY_DRAFT_STORAGE_KEY_PREFIX,
 } from '@/utils/diary-draft-storage';
-import {
-  BODY_MAX_LENGTH,
-  splitIntoGraphemes,
-  truncateForAccessibilityLabel,
-  truncateToBodyMaxLength,
-} from '@/utils/diary-text';
-import { getSearchExcerpt, matchesSearchQuery } from '@/utils/diary-search';
+import { BODY_MAX_LENGTH, splitIntoGraphemes, truncateToBodyMaxLength } from '@/utils/diary-text';
 import {
   buildDiaryPartialCorruptionMessage,
   DIARY_LOAD_ERROR_MESSAGE,
@@ -64,286 +50,10 @@ import {
   type DiaryEntry,
 } from '@/utils/diary-storage';
 
-// 週表示レイアウトの「今日」判定を再評価する間隔(ミリ秒)。タブ画面が保持され続けても
-// 日付をまたいだタイミングから1分以内には追従できるようにする
-const TODAY_DATE_KEY_REFRESH_INTERVAL_MS = 60 * 1000;
-
 // タブバー(@react-navigation/bottom-tabsのデフォルト、tabBarStyle未カスタマイズ)のおおよその
 // コンテンツ高さ(セーフエリア分は含まない)。ボトムシート系モーダルの下端がタブバーと重ならないよう、
 // insets.bottomと合わせてpaddingBottomに加算する
 const BOTTOM_TAB_BAR_CONTENT_HEIGHT = 49;
-
-// 年月ピッカーモーダルの高さ上限(画面高さに対する割合)
-const MONTH_PICKER_MAX_HEIGHT_RATIO = 0.7;
-
-// 外枠の実測高さがまだ取れていない初回レンダー用のフォールバック値
-const DEFAULT_DAY_CELL_HEIGHT = 48;
-// 日付セル内テキストの拡大率上限。OS文字サイズ設定で無制限に拡大されるとdayCellHeightを
-// 超えてoverflow: 'hidden'で見切れてしまうため、上限を設ける
-const DAY_CELL_MAX_FONT_SCALE = 1.5;
-// showSixWeeksにより月をまたいでも常に6行になるため、固定値で計算する
-const CALENDAR_WEEK_ROWS = 6;
-// react-native-calendarsのヘッダー+曜日行のおおよその高さと、週の行マージン(weekVerticalMargin=7の上下2回分)
-const CALENDAR_CHROME_HEIGHT = 90;
-const CALENDAR_WEEK_ROW_MARGIN = 14;
-
-function getMonthIndex(year: number, month: number): number {
-  return year * 12 + month;
-}
-
-function getPickerMaxMonthIndex(today: Date): number {
-  return getMonthIndex(today.getFullYear(), today.getMonth() + 1);
-}
-
-// 日記が無い月にも過去日の日記を書けるよう、カレンダー・年月ピッカーの下限は最古の日記の月に
-// かかわらず、少なくとも今年からこの年数分さかのぼった年の1月まで遡れるようにする
-const CALENDAR_MIN_YEARS_BACK = 10;
-
-function getPickerMinMonthIndex(entries: DiaryEntry[], pickerMaxMonthIndex: number): number {
-  const floorMonthIndex = getMonthIndex(
-    getYearFromMonthIndex(pickerMaxMonthIndex) - CALENDAR_MIN_YEARS_BACK,
-    1,
-  );
-  const entryMonthIndexes = entries
-    .map((entry) => {
-      const createdAt = new Date(entry.createdAt);
-      if (Number.isNaN(createdAt.getTime())) {
-        return null;
-      }
-      return getMonthIndex(createdAt.getFullYear(), createdAt.getMonth() + 1);
-    })
-    .filter((monthIndex): monthIndex is number => monthIndex !== null);
-
-  return Math.min(floorMonthIndex, ...entryMonthIndexes);
-}
-
-function getYearFromMonthIndex(monthIndex: number): number {
-  return Math.floor((monthIndex - 1) / 12);
-}
-
-function getMonthFromMonthIndex(monthIndex: number): number {
-  return ((monthIndex - 1) % 12) + 1;
-}
-
-// 指定した年月の1日を表す'YYYY-MM-DD'キーを組み立てる
-function getFirstDayOfMonthKey(year: number, month: number): string {
-  return `${year}-${`${month}`.padStart(2, '0')}-01`;
-}
-
-// react-native-calendarsが使うdayComponentのpropsの型(ライブラリ側から直接exportされていないため、
-// CalendarPropsから抽出して利用する)
-type DayComponentProps = ComponentProps<NonNullable<CalendarProps['dayComponent']>>;
-
-// 日本語の月名。react-native-calendarsのロケール設定と年月ピッカーの月ボタン表示で共有する
-const JA_MONTH_NAMES = [
-  '1月',
-  '2月',
-  '3月',
-  '4月',
-  '5月',
-  '6月',
-  '7月',
-  '8月',
-  '9月',
-  '10月',
-  '11月',
-  '12月',
-];
-
-// アプリ全体が日本語UIのため、カレンダーの月名・曜日名・「今日」ボタンの表記も日本語化する
-LocaleConfig.locales.ja = {
-  monthNames: JA_MONTH_NAMES,
-  monthNamesShort: JA_MONTH_NAMES,
-  dayNames: ['日曜日', '月曜日', '火曜日', '水曜日', '木曜日', '金曜日', '土曜日'],
-  dayNamesShort: ['日', '月', '火', '水', '木', '金', '土'],
-  today: '今日',
-};
-LocaleConfig.defaultLocale = 'ja';
-
-// 週表示カレンダーのヘッダーで使う曜日の短縮名(getWeekDaysのdayOfWeek(0:日〜6:土)に対応する並び)
-const JA_WEEKDAY_SHORT_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
-
-// 週表示レイアウトのカレンダー部分。フォーカス中の日を含む週(日曜始まり)の7日分を1行の
-// ヘッダーとして表示し、各日付の下にその日の日記を作成日時の昇順で並べる(初期フォーカスは今日)。
-// ヘッダーの日付タップ・専用の前後日ボタンのタップ・左右スワイプでフォーカスを前後の日へ移動でき、
-// フォーカスが週の外に出た場合は表示する週ごと自動的に切り替わる。
-// 日記の無い今日以前の日には、月表示の空日タップと同じく新規作成モーダルを開く「+」ボタンを出す
-function WeekCalendarView({
-  entriesByDate,
-  onEntryPress,
-  onCreateEntry,
-  isLoading,
-}: {
-  entriesByDate: Record<string, DiaryEntry[]>;
-  onEntryPress: (dateKey: string) => void;
-  onCreateEntry: (dateKey: string) => void;
-  // 日記の有無が未確定の間は新規作成ボタンを出さない
-  isLoading: boolean;
-}) {
-  const textColor = useThemeColor({}, 'text');
-  const tintColor = useThemeColor({}, 'tint');
-  const backgroundColor = useThemeColor({}, 'background');
-  const iconColor = useThemeColor({}, 'icon');
-
-  // 「今日」の日付キー。expo-routerのTabsはタブ画面をアンマウントしないため、マウント時一度きりの
-  // 評価だと週表示を開いたまま日付をまたいでも古い日付を指し続ける。フォーカス復帰時に加え、
-  // 開いたままでも追従できるようタイマーでも定期的に再評価する
-  const [todayDateKey, setTodayDateKey] = useState(() => toDateKey(new Date()));
-  useFocusEffect(
-    useCallback(() => {
-      setTodayDateKey(toDateKey(new Date()));
-    }, []),
-  );
-  useEffect(() => {
-    const intervalId = setInterval(() => {
-      setTodayDateKey(toDateKey(new Date()));
-    }, TODAY_DATE_KEY_REFRESH_INTERVAL_MS);
-    return () => clearInterval(intervalId);
-  }, []);
-  // フォーカス中の日。初期値は今日で、タップ/スワイプ操作で前後に移動する
-  const [focusedDate, setFocusedDate] = useState(() => new Date());
-  const focusedDateKey = useMemo(() => toDateKey(focusedDate), [focusedDate]);
-  // 表示する週はフォーカス中の日を基準に毎回計算し直すため、週の外へフォーカスが
-  // 移動した場合も自動的に隣の週へ表示が切り替わる
-  const weekDays = useMemo(() => getWeekDays(focusedDate), [focusedDate]);
-
-  // フォーカスをdelta日分(前日: -1 / 翌日: +1)移動する。前後日ボタンのタップ・スワイプ操作の共通処理
-  const moveFocusByDays = useCallback((delta: number) => {
-    setFocusedDate((current) => {
-      const next = new Date(current);
-      next.setDate(next.getDate() + delta);
-      return next;
-    });
-  }, []);
-
-  // 週ヘッダーの日付タップで、その日へフォーカスを移す
-  const handleFocusDate = useCallback((dateKey: string) => {
-    setFocusedDate(dateKeyToDate(dateKey));
-  }, []);
-
-  // 左右スワイプでフォーカスを前後の日へ移動するジェスチャー(追加ライブラリ不要なPanResponderを使用)。
-  // 移動量の判定自体はgetSwipeDayDeltaに切り出しており、ここでは結果に応じてフォーカスを動かすだけ
-  const panResponderRef = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_event, gestureState) =>
-        getSwipeDayDelta(gestureState.dx, gestureState.dy) !== 0,
-      onPanResponderRelease: (_event, gestureState) => {
-        const delta = getSwipeDayDelta(gestureState.dx, gestureState.dy);
-        if (delta !== 0) {
-          moveFocusByDays(delta);
-        }
-      },
-    }),
-  );
-
-  const isWeekEmpty =
-    !isLoading && weekDays.every((weekDay) => (entriesByDate[weekDay.dateKey] ?? []).length === 0);
-
-  return (
-    <View
-      style={[styles.weekWrapper, { borderColor: iconColor, backgroundColor }]}
-      {...panResponderRef.current.panHandlers}
-    >
-      <View style={styles.weekFocusNav}>
-        <Pressable
-          onPress={() => moveFocusByDays(-1)}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel="前の日へ移動"
-        >
-          <IconSymbol name="chevron.left" size={20} color={tintColor} />
-        </Pressable>
-        <ThemedText type="subtitle" style={{ color: textColor }}>
-          {formatDateHeading(focusedDateKey)}
-        </ThemedText>
-        <Pressable
-          onPress={() => moveFocusByDays(1)}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel="次の日へ移動"
-        >
-          <IconSymbol name="chevron.right" size={20} color={tintColor} />
-        </Pressable>
-      </View>
-      <ScrollView contentContainerStyle={styles.weekScrollContent}>
-        {isWeekEmpty ? (
-          <ThemedText style={styles.weekEmptyHint}>
-            「+」をタップすると、その日の日記を新規作成できます
-          </ThemedText>
-        ) : null}
-        <View style={styles.weekRow}>
-          {weekDays.map((weekDay) => {
-            const isToday = weekDay.dateKey === todayDateKey;
-            const isFocused = weekDay.dateKey === focusedDateKey;
-            const dayEntries = entriesByDate[weekDay.dateKey] ?? [];
-            return (
-              <View key={weekDay.dateKey} style={styles.weekColumn}>
-                <Pressable
-                  onPress={() => handleFocusDate(weekDay.dateKey)}
-                  style={[styles.weekColumnHeader, isFocused && { borderColor: tintColor }]}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${formatDateHeading(weekDay.dateKey)}にフォーカスを移動`}
-                  accessibilityState={{ selected: isFocused }}
-                >
-                  <ThemedText style={[styles.weekDayName, { color: textColor }]}>
-                    {JA_WEEKDAY_SHORT_NAMES[weekDay.dayOfWeek]}
-                  </ThemedText>
-                  {isToday ? (
-                    <View style={[styles.todayBadge, { backgroundColor: tintColor }]}>
-                      <ThemedText
-                        style={[styles.dayNumber, { color: backgroundColor, fontWeight: '700' }]}
-                      >
-                        {weekDay.day}
-                      </ThemedText>
-                    </View>
-                  ) : (
-                    <ThemedText style={styles.dayNumber}>{weekDay.day}</ThemedText>
-                  )}
-                </Pressable>
-                <View style={styles.weekColumnEntries}>
-                  {dayEntries.map((entry) => (
-                    <Pressable
-                      key={entry.id}
-                      onPress={() => onEntryPress(weekDay.dateKey)}
-                      style={[styles.weekEntryItem, { backgroundColor: tintColor }]}
-                      accessibilityRole="button"
-                      accessibilityLabel={`${formatDateHeading(weekDay.dateKey)}の日記: ${truncateForAccessibilityLabel(entry.text)}`}
-                    >
-                      <ThemedText
-                        numberOfLines={2}
-                        style={[styles.weekEntryText, { color: backgroundColor }]}
-                      >
-                        {entry.text || '(内容なし)'}
-                      </ThemedText>
-                    </Pressable>
-                  ))}
-                  {!isLoading && dayEntries.length === 0 && weekDay.dateKey <= todayDateKey ? (
-                    <Pressable
-                      onPress={() => onCreateEntry(weekDay.dateKey)}
-                      hitSlop={8}
-                      style={[
-                        styles.weekCreateButton,
-                        { borderColor: tintColor },
-                        // 全日が空の週では今日の列だけ強調して、最初に押す場所が分かるようにする
-                        isWeekEmpty && isToday && styles.weekCreateButtonEmphasized,
-                      ]}
-                      accessibilityRole="button"
-                      accessibilityLabel={`${formatDateHeading(weekDay.dateKey)}の日記を新規作成`}
-                    >
-                      <ThemedText style={[styles.weekCreateButtonText, { color: tintColor }]}>
-                        +
-                      </ThemedText>
-                    </Pressable>
-                  ) : null}
-                </View>
-              </View>
-            );
-          })}
-        </View>
-      </ScrollView>
-    </View>
-  );
-}
 
 export default function HomeScreen() {
   const [entries, setEntries] = useState<DiaryEntry[]>([]);
@@ -359,34 +69,13 @@ export default function HomeScreen() {
   // 一部エントリの破損を検知した際に一時的に表示するトーストのメッセージ。保存成功トーストとは
   // 独立したstateにし、それぞれ別のSaveToastとして同時に表示できるようにする
   const [corruptionToastMessage, setCorruptionToastMessage] = useState<string | null>(null);
-  // 日記本文のキーワード検索用の入力値(composerの入力とは独立したstate)
-  const [searchQuery, setSearchQuery] = useState('');
   // handleSaveの実行中かどうか・エラー内容。連打による重複保存を防ぐため、実行中は早期returnしボタンもdisabledにする
   const { isSaving, error: saveError, save: saveDraftEntry } = useSaveDiaryEntry();
   // 新規作成モーダルの対象日付('YYYY-MM-DD')。nullの間はモーダルを閉じている
   const [newEntryDate, setNewEntryDate] = useState<string | null>(null);
   const draftEditRevisionRef = useRef(0);
-  // カレンダー外枠(flex: 1で残りスペースを使い切るView)の実測高さ(onLayoutで取得)。
-  // 日付グリッドの高さもこの値を基準に算出し、外枠との基準を一致させる
-  const [wrapperHeight, setWrapperHeight] = useState(0);
-  // カレンダーに現在表示中の年・月。react-native-calendarsの`current`propは初回マウント時にしか
-  // 参照されない(ジャンプにはinitialDateを使う)ため、ヘッダー表示・ピッカーはこのstateを正とし、
-  // onMonthChangeでスワイプ/矢印操作にも追従させる
-  const [displayedYear, setDisplayedYear] = useState(() => new Date().getFullYear());
-  const [displayedMonth, setDisplayedMonth] = useState(() => new Date().getMonth() + 1);
-  // Calendarへ渡す'YYYY-MM-DD'。`current`propは初回マウント時のみ参照され追従しないが、
-  // `initialDate`は値が変わるたびその月へジャンプするため、年月ピッカーからのジャンプに使う。
-  // テーマ切替時の強制再マウント後も移動先の月を復元できるよう、handleMonthChangeでも同期させる
-  const [calendarInitialDate, setCalendarInitialDate] = useState(() => toDateKey(new Date()));
-  // 年月ジャンプ用ピッカーの表示状態と、ピッカー内で選択中の年(月はdisplayedMonthを参照)
-  const [isMonthPickerVisible, setIsMonthPickerVisible] = useState(false);
-  const [pickerYear, setPickerYear] = useState(displayedYear);
-
-  // 年月ピッカーモーダルのアニメーション制御(詳細はuseModalSlideTransitionを参照)
-  const monthPickerTransition = useModalSlideTransition(isMonthPickerVisible);
 
   const router = useRouter();
-  const { colorScheme } = useThemePreference();
   // 月表示/週表示のどちらでホーム画面のカレンダー部分を表示するかの設定
   const { layout: calendarLayout } = useCalendarLayoutPreference();
   const textColor = useThemeColor({}, 'text');
@@ -394,16 +83,11 @@ export default function HomeScreen() {
   const backgroundColor = useThemeColor({}, 'background');
   const iconColor = useThemeColor({}, 'icon');
   const errorColor = useThemeColor({}, 'error');
-  const searchHighlightBackgroundColor = useThemeColor({}, 'searchHighlightBackground');
   // ボトムシート系モーダル(新規作成・年月ピッカー)の下端がタブバーと重ならないよう、
   // セーフエリア下端の分だけ余分にpaddingBottomへ加算する。TabScreenContainerが担うのは
   // 上端のセーフエリア対応のみで下端は扱わないため、ここでの加算は二重加算にはならない
   const insets = useSafeAreaInsets();
   const modalContentBottomPadding = insets.bottom + BOTTOM_TAB_BAR_CONTENT_HEIGHT;
-  // modalContentのmaxHeight(%)は内容量で高さが決まる親ラッパーを基準に解決され上限として機能しないため、
-  // 画面高さからpxで算出して年月ピッカーのみ上書きする
-  const { height: windowHeight } = useWindowDimensions();
-  const monthPickerMaxHeight = windowHeight * MONTH_PICKER_MAX_HEIGHT_RATIO;
 
   // この画面内の保存処理(新規保存・日付指定の新規作成)を直列化するキュー。
   // 編集・削除は専用画面で直接永続化するため対象外。loadEntriesが参照するため宣言順を前にしている
@@ -605,19 +289,9 @@ export default function HomeScreen() {
     return map;
   }, [entries]);
 
-  // 検索キーワードの前後の空白を除いたもの。空文字列の間は「検索していない」状態として扱う
-  const trimmedSearchQuery = searchQuery.trim();
-
-  // 検索キーワードに本文が部分一致する(大文字小文字・全角半角・ひらがな/カタカナの表記ゆれを
-  // 区別しない)エントリの一覧。日時の降順(新しい順)に並べ替える
-  const searchResults = useMemo(() => {
-    if (!trimmedSearchQuery) {
-      return [];
-    }
-    return entries
-      .filter((entry) => matchesSearchQuery(entry.text, trimmedSearchQuery))
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [entries, trimmedSearchQuery]);
+  const { searchQuery, setSearchQuery, trimmedSearchQuery, searchResults, clearSearch } =
+    useDiarySearch(entries);
+  const monthNavigation = useMonthNavigation(entries);
 
   // 検索結果の項目がタップされたら、そのエントリが書かれた日付の一覧画面へ遷移する
   const handleSearchResultPress = useCallback(
@@ -634,116 +308,6 @@ export default function HomeScreen() {
     },
     [router],
   );
-
-  // 検索欄の「クリア」ボタン押下時、検索キーワードを空にしてカレンダー表示へ戻す
-  const handleClearSearch = useCallback(() => {
-    setSearchQuery('');
-  }, []);
-
-  // 外枠の実測高さ(wrapperHeight)からヘッダー+曜日行の高さと6週分の行マージンを差し引き、
-  // 残りを6週で均等に割って日付セルの高さを算出する。カレンダー本体側の実測値を使う反復補正も
-  // 試したが、react-native-calendarsのレイアウト確定タイミングとズレて不安定だったため、
-  // 外枠の実測値のみを使うシンプルな一度切りの計算にしている
-  const dayCellHeight = useMemo(() => {
-    if (wrapperHeight <= 0) {
-      return DEFAULT_DAY_CELL_HEIGHT;
-    }
-    const gridHeight = wrapperHeight - CALENDAR_CHROME_HEIGHT;
-    const perRowHeight = gridHeight / CALENDAR_WEEK_ROWS - CALENDAR_WEEK_ROW_MARGIN;
-    return Math.max(DEFAULT_DAY_CELL_HEIGHT, perRowHeight);
-  }, [wrapperHeight]);
-
-  const [pickerToday, setPickerToday] = useState(() => new Date());
-  const pickerMaxYear = pickerToday.getFullYear();
-  const pickerMaxMonthIndex = getPickerMaxMonthIndex(pickerToday);
-
-  const pickerMinMonthIndex = useMemo(() => {
-    return getPickerMinMonthIndex(entries, pickerMaxMonthIndex);
-  }, [entries, pickerMaxMonthIndex]);
-
-  const pickerMinYear = getYearFromMonthIndex(pickerMinMonthIndex);
-
-  const isPickerMonthInRange = useCallback(
-    (year: number, month: number) => {
-      const monthIndex = getMonthIndex(year, month);
-      return monthIndex >= pickerMinMonthIndex && monthIndex <= pickerMaxMonthIndex;
-    },
-    [pickerMinMonthIndex, pickerMaxMonthIndex],
-  );
-
-  const isPreviousYearDisabled = pickerYear <= pickerMinYear;
-  const isNextYearDisabled = pickerYear >= pickerMaxYear;
-
-  // スワイプ・矢印操作で表示月が変わった際、ヘッダー表示・年月ピッカーのハイライト・
-  // calendarInitialDateをその月に追従させる。テーマ切替時の`key={colorScheme}`強制再マウント後、
-  // 新しいCalendarインスタンスはinitialDateから表示月を再構築するため、ここで同期させておかないと
-  // スワイプ・矢印だけで移動した状態でテーマを切り替えた際に日付グリッドが今日の月へ巻き戻ってしまう
-  const handleMonthChange = useCallback((date: DateData) => {
-    setDisplayedYear(date.year);
-    setDisplayedMonth(date.month);
-    setCalendarInitialDate(getFirstDayOfMonthKey(date.year, date.month));
-  }, []);
-
-  // ヘッダーの年月表示をタップすると、現在表示中の年を初期選択状態にしてピッカーを開く
-  const handleOpenMonthPicker = useCallback(() => {
-    const currentToday = new Date();
-    const currentPickerMaxMonthIndex = getPickerMaxMonthIndex(currentToday);
-    const currentPickerMinYear = getYearFromMonthIndex(
-      getPickerMinMonthIndex(entries, currentPickerMaxMonthIndex),
-    );
-    setPickerToday(currentToday);
-    setPickerYear(
-      Math.min(Math.max(displayedYear, currentPickerMinYear), currentToday.getFullYear()),
-    );
-    setIsMonthPickerVisible(true);
-  }, [displayedYear, entries]);
-
-  const handleCloseMonthPicker = useCallback(() => {
-    setIsMonthPickerVisible(false);
-  }, []);
-
-  const handlePickerYearStep = useCallback(
-    (delta: number) => {
-      setPickerYear((year) => Math.min(Math.max(year + delta, pickerMinYear), pickerMaxYear));
-    },
-    [pickerMinYear, pickerMaxYear],
-  );
-
-  // 月ボタンが選択されたら、その年月の1日をcalendarInitialDateへセットしてカレンダーをジャンプさせる
-  const handleSelectMonth = useCallback(
-    (month: number) => {
-      if (!isPickerMonthInRange(pickerYear, month)) {
-        return;
-      }
-      setDisplayedYear(pickerYear);
-      setDisplayedMonth(month);
-      setCalendarInitialDate(getFirstDayOfMonthKey(pickerYear, month));
-      setIsMonthPickerVisible(false);
-    },
-    [isPickerMonthInRange, pickerYear],
-  );
-
-  // react-native-calendarsのrenderHeaderは矢印・曜日行を維持したまま中央の見出しのみ差し替えられるため、
-  // 既存の月送り・レイアウトに影響せず見出しをタップ可能なボタンに置き換えられる
-  const renderCalendarHeader = useCallback(() => {
-    return (
-      <Pressable
-        onPress={handleOpenMonthPicker}
-        hitSlop={8}
-        accessibilityRole="button"
-        accessibilityLabel={`${displayedYear}年${displayedMonth}月、年月を選択して移動`}
-        style={styles.calendarHeaderButton}
-      >
-        <ThemedText
-          allowFontScaling={false}
-          style={[styles.calendarHeaderText, { color: textColor }]}
-        >
-          {displayedYear}年{displayedMonth}月
-        </ThemedText>
-        <IconSymbol name="chevron.down" size={18} color={textColor} />
-      </Pressable>
-    );
-  }, [displayedYear, displayedMonth, handleOpenMonthPicker, textColor]);
 
   // 未来日は新規作成の対象外。月表示ではmaxDateで既に押せなくなっている(renderDay参照)が、
   // 週表示と共通の入口として念のため二重にチェックする
@@ -769,80 +333,6 @@ export default function HomeScreen() {
       openNewEntryModal(date.dateString);
     },
     [isLoading, entriesByDate, router, openNewEntryModal],
-  );
-
-  const renderDay = useCallback(
-    ({ date, state }: DayComponentProps) => {
-      if (!date) {
-        return null;
-      }
-
-      const dayEntries = entriesByDate[date.dateString];
-      // その日にエントリが実在するか(タイトル文字列の有無ではなくhandleDayPressと同じ基準で判定。
-      // 本文が空白のみのレガシーデータではタイトルが空文字列になり得るため区別が必要)
-      const hasEntries = Boolean(dayEntries?.length);
-      const entryCount = dayEntries?.length ?? 0;
-      const isDisabled = state === 'disabled' || state === 'inactive';
-      const isToday = state === 'today';
-      // 未来日はmaxDateによりstateが'disabled'になるため、それ以外は押せる扱いにする。
-      // 読み込み中はhandleDayPressが何もしないため、見た目・アクセシビリティ上も押せない扱いにする
-      const isPressable = !isLoading && (hasEntries || state !== 'disabled');
-      // スクリーンリーダー向けに「何年何月何日か」「日記の有無・新規作成可否」が伝わるラベルを組み立てる
-      const statusLabel = hasEntries
-        ? `日記あり(${entryCount}件)`
-        : isPressable
-          ? '日記なし、タップして新規作成'
-          : '日記なし';
-      const accessibilityLabel = `${formatDateHeading(date.dateString)}、${statusLabel}`;
-
-      return (
-        <Pressable
-          style={[styles.dayCell, { height: dayCellHeight }]}
-          // react-native-calendars内部のonPressはmaxDateを超える日付で発火しないため、
-          // isPressableの判定と遷移処理を一致させるためhandleDayPressを直接呼び出す
-          onPress={() => handleDayPress(date)}
-          disabled={!isPressable}
-          accessibilityRole={isPressable ? 'button' : undefined}
-          accessibilityLabel={accessibilityLabel}
-          // タップしても反応しない日はスクリーンリーダーにも操作不可であることを明示的に伝える
-          accessibilityState={{ disabled: !isPressable }}
-        >
-          {isToday ? (
-            // 今日のセルは数字を丸背景で囲んで強調する
-            <View style={[styles.todayBadge, { backgroundColor: tintColor }]}>
-              <ThemedText
-                style={[styles.dayNumber, { color: backgroundColor, fontWeight: '700' as const }]}
-                maxFontSizeMultiplier={DAY_CELL_MAX_FONT_SCALE}
-              >
-                {date.day}
-              </ThemedText>
-            </View>
-          ) : (
-            <ThemedText
-              style={[styles.dayNumber, isDisabled ? styles.dayNumberDisabled : undefined]}
-              maxFontSizeMultiplier={DAY_CELL_MAX_FONT_SCALE}
-            >
-              {date.day}
-            </ThemedText>
-          )}
-          {entryCount === 1 ? (
-            // タイトル文字は小さすぎて読めないため、日記が1件あることが伝わるドットで代替する
-            <View style={[styles.entryDot, { backgroundColor: tintColor }]} />
-          ) : entryCount > 1 ? (
-            // 2件以上ある場合は合計件数を丸バッジで表示する
-            <View style={[styles.entryCountBadge, { backgroundColor: tintColor }]}>
-              <ThemedText
-                style={[styles.entryCountText, { color: backgroundColor }]}
-                maxFontSizeMultiplier={DAY_CELL_MAX_FONT_SCALE}
-              >
-                {entryCount}
-              </ThemedText>
-            </View>
-          ) : null}
-        </Pressable>
-      );
-    },
-    [entriesByDate, isLoading, tintColor, backgroundColor, dayCellHeight, handleDayPress],
   );
 
   // 文字数カウンター表示用に、grapheme単位で数え直す(絵文字などでUTF-16の.lengthとずれるため)
@@ -935,84 +425,18 @@ export default function HomeScreen() {
           </ThemedView>
 
           {/* 日記検索用の入力欄。composerとは独立し、キーワード入力中は下に検索結果一覧を表示する */}
-          <View style={styles.searchContainer}>
-            <TextInput
-              style={[
-                styles.searchInput,
-                // クリアボタンと文字が重ならないよう、入力中のみ右側の余白を広げる
-                searchQuery ? styles.searchInputWithClear : null,
-                { color: textColor, borderColor: iconColor },
-              ]}
-              placeholder="日記を検索"
-              placeholderTextColor={iconColor}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              returnKeyType="search"
-              accessibilityLabel="日記を検索"
-              // 検索欄は本文入力ほど厳密な制御は不要なため、標準のmaxLength(UTF-16コードユニット単位)を使う
-              maxLength={BODY_MAX_LENGTH}
-            />
-            {searchQuery ? (
-              // clearButtonModeはiOS専用のため、カスタムボタンでクリア操作をクロスプラットフォームに実現する
-              <Pressable
-                style={styles.searchClearButton}
-                onPress={handleClearSearch}
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel="検索キーワードをクリア"
-              >
-                <ThemedText style={[styles.searchClearButtonText, { color: iconColor }]}>
-                  ✕
-                </ThemedText>
-              </Pressable>
-            ) : null}
-          </View>
+          <DiarySearchInput
+            query={searchQuery}
+            onChangeQuery={setSearchQuery}
+            onClear={clearSearch}
+          />
 
           {trimmedSearchQuery ? (
             // 検索キーワードが入力されている間は、通常のカレンダー表示の代わりに検索結果一覧を表示する
-            <FlatList
-              style={styles.searchResultsList}
-              data={searchResults}
-              keyExtractor={(item) => item.id}
-              // 一覧をスクロールした際にもキーボードを閉じられるようにする
-              keyboardDismissMode="on-drag"
-              // キーボード表示中でも1回のタップで検索結果を選択できるようにする
-              keyboardShouldPersistTaps="handled"
-              renderItem={({ item }) => {
-                const excerpt = getSearchExcerpt(item.text, trimmedSearchQuery);
-                return (
-                  <Pressable
-                    style={[styles.searchResultItem, { borderBottomColor: iconColor }]}
-                    onPress={() => handleSearchResultPress(item)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${formatDateHeading(toDateKey(new Date(item.createdAt)))}の日記: ${truncateForAccessibilityLabel(item.text)}`}
-                  >
-                    <ThemedText style={[styles.searchResultDate, { color: iconColor }]}>
-                      {formatDateHeading(toDateKey(new Date(item.createdAt)))}
-                    </ThemedText>
-                    <ThemedText numberOfLines={2}>
-                      {excerpt.prefix}
-                      {excerpt.match ? (
-                        <ThemedText
-                          style={[
-                            styles.searchResultHighlight,
-                            { backgroundColor: searchHighlightBackgroundColor },
-                          ]}
-                        >
-                          {excerpt.match}
-                        </ThemedText>
-                      ) : null}
-                      {excerpt.suffix}
-                    </ThemedText>
-                  </Pressable>
-                );
-              }}
-              ListEmptyComponent={
-                // 検索結果が0件のときは、カレンダーが何も表示されず戸惑わないよう明示的に案内する
-                <ThemedView style={styles.emptyState}>
-                  <ThemedText style={styles.emptyStateText}>見つかりませんでした</ThemedText>
-                </ThemedView>
-              }
+            <DiarySearchResults
+              query={trimmedSearchQuery}
+              results={searchResults}
+              onResultPress={handleSearchResultPress}
             />
           ) : (
             <>
@@ -1040,10 +464,13 @@ export default function HomeScreen() {
                   </Pressable>
                 </ThemedView>
               ) : entries.length === 0 ? (
-                // 日記が1件も無い場合、案内メッセージを表示する(カレンダー自体は書く導線として表示し続ける)
+                // 日記が1件も無い場合の案内はここに一本化し、表示中のレイアウトで実際に押す場所を示す
+                // (カレンダー自体は書く導線として表示し続ける)
                 <ThemedView style={styles.emptyState}>
                   <ThemedText style={styles.emptyStateText}>
-                    まだ日記がありません。最初の日記を書いてみましょう。
+                    {calendarLayout === 'week'
+                      ? EMPTY_STATE_MESSAGE_WEEK
+                      : EMPTY_STATE_MESSAGE_MONTH}
                   </ThemedText>
                 </ThemedView>
               ) : null}
@@ -1056,64 +483,15 @@ export default function HomeScreen() {
                   onEntryPress={handleWeekEntryPress}
                   onCreateEntry={openNewEntryModal}
                   isLoading={isLoading}
+                  showEmptyWeekHint={entries.length > 0}
                 />
               ) : (
-                <View
-                  style={[styles.calendarWrapper, { borderColor: iconColor, backgroundColor }]}
-                  onLayout={(event) => setWrapperHeight(event.nativeEvent.layout.height)}
-                >
-                  <Calendar
-                    // react-native-calendarsはtheme propのスタイルをuseRefで初回計算しキャッシュするため、
-                    // マウント後のテーマ変更に追従しない。colorSchemeをkeyにして変化のたびに強制再マウントさせる
-                    key={colorScheme}
-                    theme={{
-                      backgroundColor,
-                      calendarBackground: backgroundColor,
-                      // 曜日行はtextColorを使い、アイコン色より高いコントラストで視認性を確保する
-                      textSectionTitleColor: textColor,
-                      textDayHeaderFontWeight: '600',
-                      dayTextColor: textColor,
-                      arrowColor: tintColor,
-                      todayTextColor: tintColor,
-                    }}
-                    dayComponent={renderDay}
-                    onDayPress={handleDayPress}
-                    // 見出しを日本語語順で表示しつつ、タップで年月ピッカーを開くボタンに差し替える
-                    renderHeader={renderCalendarHeader}
-                    enableSwipeMonths
-                    // ピッカーから任意の年月へジャンプするための制御用prop(詳細はcalendarInitialDateを参照)
-                    initialDate={calendarInitialDate}
-                    onMonthChange={handleMonthChange}
-                    // 未来日を新規作成の対象外にするため、今日より後の日付をタップ不可(state: 'disabled')にする
-                    maxDate={toDateKey(new Date())}
-                    // 年月ピッカーで選択可能な最古月より過去へスワイプできてしまうと、
-                    // ピッカーのクランプ処理と表示中の月が食い違うため下限を揃える
-                    minDate={getFirstDayOfMonthKey(
-                      pickerMinYear,
-                      getMonthFromMonthIndex(pickerMinMonthIndex),
-                    )}
-                    // minDate/maxDateは日付セルの見た目にのみ影響し、矢印タップ・スワイプによる
-                    // 月送り自体はブロックしないため、範囲外への移動はここで直接止める
-                    onPressArrowLeft={(subtractMonth) => {
-                      if (getMonthIndex(displayedYear, displayedMonth) > pickerMinMonthIndex) {
-                        subtractMonth();
-                      }
-                    }}
-                    onPressArrowRight={(addMonth) => {
-                      if (getMonthIndex(displayedYear, displayedMonth) < pickerMaxMonthIndex) {
-                        addMonth();
-                      }
-                    }}
-                    disableArrowLeft={
-                      getMonthIndex(displayedYear, displayedMonth) <= pickerMinMonthIndex
-                    }
-                    disableArrowRight={
-                      getMonthIndex(displayedYear, displayedMonth) >= pickerMaxMonthIndex
-                    }
-                    // 月によって行数(4〜6週)が変わって高さがガタつかないよう、常に6週分の高さで揃える
-                    showSixWeeks
-                  />
-                </View>
+                <MonthCalendar
+                  entriesByDate={entriesByDate}
+                  isLoading={isLoading}
+                  navigation={monthNavigation}
+                  onDayPress={handleDayPress}
+                />
               )}
             </>
           )}
@@ -1128,144 +506,10 @@ export default function HomeScreen() {
           onClose={handleCloseNewEntryModal}
         />
 
-        <Modal
-          visible={monthPickerTransition.isMounted}
-          animationType="none"
-          transparent
-          onRequestClose={handleCloseMonthPicker}
-          statusBarTranslucent
-          navigationBarTranslucent
-        >
-          {/* 背景の半透明オーバーレイをタップした場合はモーダルを閉じる(他のモーダルと同じパターン) */}
-          <Pressable
-            style={styles.modalOverlay}
-            onPress={handleCloseMonthPicker}
-            testID="modal-overlay-pressable"
-          >
-            <Animated.View
-              pointerEvents="none"
-              style={[
-                StyleSheet.absoluteFill,
-                styles.modalOverlayBackground,
-                { opacity: monthPickerTransition.overlayOpacity },
-              ]}
-            />
-            <Animated.View
-              style={{ transform: [{ translateY: monthPickerTransition.contentTranslateY }] }}
-            >
-              <ThemedView
-                style={[
-                  styles.modalContent,
-                  {
-                    borderColor: iconColor,
-                    paddingBottom: modalContentBottomPadding,
-                    maxHeight: monthPickerMaxHeight,
-                  },
-                ]}
-                // オーバーレイへのタップ伝播を防ぐため、modalContent内のタッチ開始をこのViewが引き受ける
-                onStartShouldSetResponder={() => true}
-              >
-                <View style={styles.modalHeader}>
-                  <ThemedText type="subtitle">年月を選択</ThemedText>
-                  <Pressable
-                    onPress={handleCloseMonthPicker}
-                    accessibilityRole="button"
-                    accessibilityLabel="閉じる"
-                  >
-                    <ThemedText style={[styles.modalCloseText, { color: tintColor }]}>
-                      閉じる
-                    </ThemedText>
-                  </Pressable>
-                </View>
-                <View style={styles.yearStepperRow}>
-                  <Pressable
-                    onPress={() => handlePickerYearStep(-1)}
-                    disabled={isPreviousYearDisabled}
-                    hitSlop={8}
-                    accessibilityRole="button"
-                    accessibilityLabel="前の年"
-                    accessibilityState={{ disabled: isPreviousYearDisabled }}
-                    style={[
-                      styles.yearStepperButton,
-                      isPreviousYearDisabled ? styles.disabledButton : null,
-                    ]}
-                  >
-                    <IconSymbol
-                      name="chevron.left"
-                      size={24}
-                      color={isPreviousYearDisabled ? iconColor : tintColor}
-                    />
-                  </Pressable>
-                  <ThemedText type="subtitle">{pickerYear}年</ThemedText>
-                  <Pressable
-                    onPress={() => handlePickerYearStep(1)}
-                    disabled={isNextYearDisabled}
-                    hitSlop={8}
-                    accessibilityRole="button"
-                    accessibilityLabel="次の年"
-                    accessibilityState={{ disabled: isNextYearDisabled }}
-                    style={[
-                      styles.yearStepperButton,
-                      isNextYearDisabled ? styles.disabledButton : null,
-                    ]}
-                  >
-                    <IconSymbol
-                      name="chevron.right"
-                      size={24}
-                      color={isNextYearDisabled ? iconColor : tintColor}
-                    />
-                  </Pressable>
-                </View>
-                <ThemedText style={[styles.monthPickerHint, { color: iconColor }]}>
-                  薄く表示されている月は選択できません
-                </ThemedText>
-                {/* maxHeightに収まらない画面でも全ての月に到達できるようスクロール可能にする */}
-                <ScrollView
-                  style={styles.monthGridScrollView}
-                  contentContainerStyle={[
-                    styles.monthGrid,
-                    { paddingBottom: modalContentBottomPadding },
-                  ]}
-                  testID="month-picker-scroll"
-                >
-                  {JA_MONTH_NAMES.map((monthName, index) => {
-                    const month = index + 1;
-                    const isSelected = pickerYear === displayedYear && month === displayedMonth;
-                    const isDisabled = !isPickerMonthInRange(pickerYear, month);
-                    return (
-                      <Pressable
-                        key={monthName}
-                        style={[
-                          styles.monthGridButton,
-                          { borderColor: iconColor },
-                          isSelected
-                            ? { backgroundColor: tintColor, borderColor: tintColor }
-                            : null,
-                          isDisabled ? styles.disabledButton : null,
-                        ]}
-                        onPress={() => handleSelectMonth(month)}
-                        disabled={isDisabled}
-                        accessibilityRole="button"
-                        accessibilityLabel={
-                          isDisabled
-                            ? `${pickerYear}年${monthName}(選択できません)`
-                            : `${pickerYear}年${monthName}へ移動`
-                        }
-                        accessibilityState={{ selected: isSelected, disabled: isDisabled }}
-                      >
-                        <ThemedText
-                          style={isSelected ? { color: backgroundColor } : { color: textColor }}
-                        >
-                          {monthName}
-                        </ThemedText>
-                      </Pressable>
-                    );
-                  })}
-                </ScrollView>
-              </ThemedView>
-            </Animated.View>
-          </Pressable>
-        </Modal>
+        <MonthPickerModal
+          navigation={monthNavigation}
+          contentBottomPadding={modalContentBottomPadding}
+        />
       </TabScreenContainer>
     </KeyboardAvoidingView>
   );
@@ -1305,48 +549,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-  },
-  searchContainer: {
-    gap: 8,
-    // クリアボタンを入力欄の右側に重ねて配置するための基準
-    position: 'relative',
-    justifyContent: 'center',
-  },
-  searchInput: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    fontSize: 16,
-  },
-  searchInputWithClear: {
-    paddingRight: 36,
-  },
-  searchClearButton: {
-    position: 'absolute',
-    right: 8,
-    height: 24,
-    width: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  searchClearButtonText: {
-    fontSize: 16,
-    lineHeight: 16,
-  },
-  searchResultsList: {
-    flex: 1,
-  },
-  searchResultItem: {
-    gap: 4,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  searchResultDate: {
-    fontSize: 12,
-  },
-  searchResultHighlight: {
-    fontWeight: 'bold',
   },
   charCount: {
     fontSize: 12,
@@ -1388,198 +590,5 @@ const styles = StyleSheet.create({
   },
   retryButtonText: {
     fontWeight: '600',
-  },
-  calendarWrapper: {
-    // 残りスペースをすべて使い切る外枠。日付グリッドの高さ計算もこの実測高さを基準にし、
-    // 外枠と内部の基準がズレて中身がはみ出さないようにする
-    flex: 1,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 8,
-    // 実測に多少の誤差があっても、日付グリッドが外枠からはみ出して見えないようにする保険
-    overflow: 'hidden',
-  },
-  // 週表示のカレンダー部分。calendarWrapperと同様に残りスペースを使い切る
-  weekWrapper: {
-    flex: 1,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 8,
-    overflow: 'hidden',
-  },
-  weekScrollContent: {
-    padding: 8,
-  },
-  // フォーカス中の日の見出しと、タップで前後日へ移動するボタンを並べるナビゲーションバー
-  weekFocusNav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 8,
-    paddingTop: 8,
-  },
-  weekRow: {
-    flexDirection: 'row',
-    gap: 4,
-  },
-  weekColumn: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 4,
-  },
-  // フォーカス中の日を枠線で強調するため、常に(透明の)枠線を確保しておきレイアウトのガタつきを防ぐ
-  weekColumnHeader: {
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 2,
-    paddingHorizontal: 4,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  weekDayName: {
-    fontSize: 12,
-  },
-  weekColumnEntries: {
-    width: '100%',
-    gap: 4,
-  },
-  // タップ領域の目安(44pt)を確保した、日記の無い日の新規作成ボタン
-  weekCreateButton: {
-    width: '100%',
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 6,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-  },
-  weekCreateButtonEmphasized: {
-    borderWidth: 2,
-    borderStyle: 'solid',
-  },
-  weekEmptyHint: {
-    fontSize: 13,
-    lineHeight: 18,
-    textAlign: 'center',
-    opacity: 0.7,
-    paddingBottom: 8,
-  },
-  weekCreateButtonText: {
-    fontSize: 20,
-    lineHeight: 24,
-  },
-  weekEntryItem: {
-    width: '100%',
-    borderRadius: 6,
-    paddingVertical: 4,
-    paddingHorizontal: 4,
-  },
-  weekEntryText: {
-    fontSize: 10,
-  },
-  calendarHeaderButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-  },
-  calendarHeaderText: {
-    // react-native-calendarsのデフォルト見出し(textMonthFontSize/textMonthFontWeight)と揃えた見た目にしている
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  yearStepperRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 24,
-  },
-  yearStepperButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  monthPickerHint: {
-    fontSize: 13,
-    lineHeight: 18,
-    textAlign: 'center',
-  },
-  monthGridScrollView: {
-    // maxHeightで区切られた領域の中で自身がスクロール可能な範囲として振る舞うために必要
-    flex: 1,
-  },
-  monthGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  monthGridButton: {
-    // 3列×4行で12ヶ月を並べる(gap込みで4等分すると幅がはみ出すため31%にしている)
-    width: '31%',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 8,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  disabledButton: {
-    opacity: 0.35,
-  },
-  dayCell: {
-    alignItems: 'center',
-    paddingTop: 4,
-    gap: 2,
-  },
-  dayNumber: {
-    fontSize: 14,
-  },
-  dayNumberDisabled: {
-    opacity: 0.3,
-  },
-  todayBadge: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  entryDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  entryCountBadge: {
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 2,
-  },
-  entryCountText: {
-    fontSize: 9,
-    fontWeight: '700',
-    // ThemedTextのデフォルトlineHeight(24)だと丸の中で数字が下寄りになるため、fontSizeに近い値を明示する
-    lineHeight: 11,
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  // 背景の暗さを別レイヤーにし、opacityフェードをコンテンツのスライドから独立させる
-  modalOverlayBackground: {
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-  },
-  modalContent: {
-    maxHeight: '70%',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    padding: 16,
-    gap: 8,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  modalCloseText: {
-    fontSize: 16,
   },
 });

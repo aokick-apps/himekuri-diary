@@ -26,6 +26,7 @@ import { TAB_SCREEN_CONTAINER_SAFE_AREA_TEST_ID } from '@/components/tab-screen-
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { EMPTY_STATE_MESSAGE_MONTH, EMPTY_STATE_MESSAGE_WEEK } from '@/constants/diary-messages';
 import { Colors } from '@/constants/theme';
 import { decryptText, encryptText, getOrCreateEncryptionKey } from '@/utils/diary-encryption';
 import {
@@ -194,7 +195,7 @@ const INPUT_PLACEHOLDER = '今日の出来事や気持ちを書いてみまし�
 const SEARCH_INPUT_PLACEHOLDER = '日記を検索';
 const CLOSE_BUTTON_TEXT = '閉じる';
 // 日記が0件のときにカレンダーの上に表示される案内メッセージ
-const EMPTY_STATE_TEXT = 'まだ日記がありません。最初の日記を書いてみましょう。';
+const EMPTY_STATE_TEXT = EMPTY_STATE_MESSAGE_MONTH;
 // 全件読み込みに失敗したときにカレンダーの上に表示されるエラーメッセージ(0件と区別するためのもの)
 const LOAD_ERROR_TEXT = DIARY_LOAD_ERROR_MESSAGE;
 const KEYBOARD_AVOIDING_VIEW_TEST_ID = 'keyboard-avoiding-view';
@@ -353,6 +354,15 @@ function getModalContentTouchAbsorber(modal: TestNode): TestNode {
   return candidates[0];
 }
 
+// renderを呼ばないテストではscreenへの問い合わせ自体が例外になるため、未描画は「FlatList無し」として扱う
+function isFlatListMounted(): boolean {
+  try {
+    return screen.UNSAFE_queryAllByType(FlatList).length > 0;
+  } catch {
+    return false;
+  }
+}
+
 // 初回の日記読み込みが完了し、ローディング表示が消えるまで待つ(`getItem`の呼び出しだけでは
 // `setEntries`等のstate更新の完了を保証できず、act警告や次のテストへの漏れの原因になる)
 async function waitForInitialLoad() {
@@ -396,17 +406,14 @@ describe('HomeScreen', () => {
     mockRandomUUID.mockImplementation(() => `mock-uuid-${uuidCounter++}`);
   });
 
-  // FlatList(VirtualizedList)は初回マウント・更新のたびに、表示するセルの範囲を再計算する
-  // `updateCellsBatchingPeriod`(既定50ms)のsetTimeoutを内部で予約する。`@testing-library/react-native`の
-  // 自動アンマウント(モジュール読み込み時に最上位で登録される`afterEach`)はマイクロタスク1回分しか
-  // 待たずにunmountするため、CPU負荷が高い環境ではこのタイマーがunmount前後どちらで発火するか
-  // タイミング競合し、act()外でのstate更新警告(`An update to VirtualizedList ... was not wrapped in
-  // act(...)`)を引き起こすことがある。Jestはネストした`describe`内の`afterEach`を
-  // 外側(モジュールレベル)より先に実行するため、ここで実際のマウント状態のまま50msより長く待つことで、
-  // 予約されていたタイマーをunmountされる前に確実にact()内で発火させ、警告の発生を防ぐ。
+  // FlatList(VirtualizedList)はマウント中にセル範囲再計算のタイマー(既定50ms)を予約し、自動アンマウントの
+  // 前後どちらで発火するかで act() 外の更新警告が出ることがある。実時間で待つのは遅いため、
+  // FlatList(検索結果一覧)を表示しているテストに限り、アンマウント前に act() 内で発火させる
   afterEach(async () => {
     await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 60));
+      if (isFlatListMounted()) {
+        await new Promise((resolve) => setTimeout(resolve, 60));
+      }
     });
     jest.useRealTimers();
   });
@@ -6126,9 +6133,29 @@ describe('HomeScreen', () => {
         expect(getWeekCreateButton(PAST_DATE_KEY).props.hitSlop).toBe(8);
       });
 
-      it('shows a hint explaining the "+" button and emphasizes only the today column when the whole week has no entries (正常系)', async () => {
+      it('shows a single week-specific empty message at the top instead of the in-week hint when there are no diary entries at all (正常系: 空状態の案内の一本化)', async () => {
         await renderInWeekLayoutAfterLoad();
 
+        expect(screen.getByText(EMPTY_STATE_MESSAGE_WEEK)).toBeTruthy();
+        expect(screen.queryByText(EMPTY_STATE_MESSAGE_MONTH)).toBeNull();
+        expect(screen.queryByText(/「\+」をタップすると/)).toBeNull();
+        expect(
+          StyleSheet.flatten(getWeekCreateButton(TODAY_DATE_KEY).props.style).borderWidth,
+        ).toBe(2);
+      });
+
+      it('shows a hint explaining the "+" button and emphasizes only the today column when the displayed week has no entries but other weeks do (正常系)', async () => {
+        await AsyncStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify([
+            { id: '1', text: '先月の日記', createdAt: buildCreatedAtForDateKey('2026-05-10') },
+          ]),
+        );
+        jest.clearAllMocks();
+
+        await renderInWeekLayoutAfterLoad();
+
+        expect(screen.queryByText(EMPTY_STATE_MESSAGE_WEEK)).toBeNull();
         expect(screen.getByText(/「\+」をタップすると/)).toBeTruthy();
         expect(
           StyleSheet.flatten(getWeekCreateButton(TODAY_DATE_KEY).props.style).borderWidth,

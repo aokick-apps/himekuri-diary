@@ -9,6 +9,11 @@ components/
   app-lock-screen.tsx             アプリロック中に表示するロック画面(生体認証/パスコードでの解除)
   diary-entry-composer-modal.tsx  対象日付の日記を新規登録する入力モーダル(アニメーション・下書き自動保存つき)
   external-link.tsx               外部URLを開くリンクコンポーネント
+  home/                           ホーム画面(app/(tabs)/index.tsx)を構成する部品
+    month-calendar.tsx            月表示カレンダー(日記の有無・件数を表示する日付セル、年月ピッカーを開く見出し)
+    month-picker-modal.tsx        年と月を選んでその月へジャンプするボトムシート
+    week-calendar-view.tsx        週表示レイアウトのカレンダー(フォーカス中の日を含む1週間分)
+    diary-search.tsx              日記の検索欄と、マッチ箇所をハイライトした検索結果一覧
   haptic-tab.tsx                  タップ時に触覚フィードバックを伴うタブボタン
   onboarding.tsx                  初回起動時に表示する使い方説明のオンボーディング画面
   save-toast.tsx                  保存成功時などに一時的なフィードバックを表示するトースト(スナックバー)

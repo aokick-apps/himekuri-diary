@@ -7,6 +7,7 @@
 ```
 utils/
   app-lock-authentication.ts      アプリロック(生体認証/パスコード)のサポート判定・認証の呼び出し
+  calendar-month.ts               月表示カレンダー・年月ピッカーの年月計算(月インデックス・移動可能範囲・月名)
   diary-date.ts                   日記エントリの日付・時刻の整形/変換、週表示カレンダー用の日付計算
   diary-draft-storage.ts          未保存の下書きのAsyncStorageキー定義、および暗号化した保存・復元
   diary-encryption.ts             日記データ(AsyncStorageに保存するJSON文字列)のAES-256-GCM暗号化・復号
@@ -27,6 +28,18 @@ utils/
 - `authenticateForAppLockAsync()`: 生体認証によるロック解除を試み、成功したかを返します。生体認証が失敗・利用不可の場合にOS標準のパスコードへフォールバックできるようにしています。
 
 [`contexts/app-lock-context.tsx`](../contexts/app-lock-context.tsx)から利用されます。
+
+## `calendar-month.ts` の構成
+
+ホーム画面の月表示カレンダーと年月ピッカーで使う、年月の計算です。
+
+- `getMonthIndex(year, month)` / `getYearFromMonthIndex(index)` / `getMonthFromMonthIndex(index)`: 年月を1つの整数(`年*12+月`)との間で相互に変換します。範囲比較や前後の月への移動を、整数の大小比較で行えるようにしています。
+- `getPickerMaxMonthIndex(today)`: 移動できる範囲の上限(今月)です。
+- `getPickerMinMonthIndex(entries, max)`: 移動できる範囲の下限です。最古の日記の月と、`CALENDAR_MIN_YEARS_BACK`(10)年前の1月のうち古い方を返します。日記が無い新規ユーザーでも、過去の月へ移動して日記を書けるようにするためです。
+- `getFirstDayOfMonthKey(year, month)`: その月の1日を表す`'YYYY-MM-DD'`キーです。
+- `JA_MONTH_NAMES`: カレンダーのロケール設定と年月ピッカーで共有する日本語の月名です。
+
+[`hooks/use-month-navigation.ts`](../hooks/use-month-navigation.ts)、[`components/home/`](../components/home)から利用されます。
 
 ## `diary-date.ts` の構成
 
@@ -96,7 +109,7 @@ JSONファイルから日記データをインポート(再取り込み)する�
 - `matchesSearchQuery(text, query)`: 本文が検索キーワードに部分一致するかを、`normalizeForSearch`と同じ規則で判定します。
 - `getSearchExcerpt(text, query)`: マッチ箇所の前後20文字を抜粋して`prefix`/`match`/`suffix`に分けます。切り詰めた側には省略記号を付けます。一致しない場合は、本文の先頭を書記素単位で切り詰めた文字列を返します。
 
-[`app/(tabs)/index.tsx`](<../app/(tabs)/index.tsx>)から利用されます。
+[`hooks/use-diary-search.ts`](../hooks/use-diary-search.ts)(一致判定)と[`components/home/diary-search.tsx`](../components/home/diary-search.tsx)(抜粋の表示)から利用されます。
 
 ## `diary-storage.ts` の構成
 

@@ -259,15 +259,28 @@ describe('リマインダーセクション(日記を書く習慣化のための
       fireEvent.press(screen.getByLabelText(HOUR_INCREASE_LABEL));
     });
 
-    expect(screen.getByLabelText('時 00')).toBeTruthy();
+    expect(screen.getByLabelText('00時')).toBeTruthy();
   });
 
   it('renders the hour/minute values in the monospace font so the digit width stays stable while stepping (表示: 等幅フォント)', async () => {
     renderSettingsScreen();
 
-    for (const label of ['時 21', '分 00']) {
-      const value = await screen.findByLabelText(label);
+    for (const digits of ['21', '00']) {
+      const value = await screen.findByText(digits);
       expect(StyleSheet.flatten(value.props.style).fontFamily).toBe(Fonts.mono);
+    }
+  });
+
+  it('places each unit right after its number so the time reads as "21時 : 00分" (表示: 単位は数字の後ろ)', async () => {
+    renderSettingsScreen();
+
+    for (const [digits, unit] of [
+      ['21', '時'],
+      ['00', '分'],
+    ]) {
+      const group = await screen.findByLabelText(`${digits}${unit}`);
+      const texts = within(group).getAllByText(/./);
+      expect(texts.map((node) => node.props.children)).toEqual([digits, unit]);
     }
   });
 
@@ -279,7 +292,7 @@ describe('リマインダーセクション(日記を書く習慣化のための
     try {
       renderSettingsScreen();
 
-      const initialHour = screen.getByLabelText('時 21');
+      const initialHour = screen.getByLabelText('21時');
       expect(initialHour.props.accessibilityLiveRegion).toBe('polite');
       expect(announceSpy).not.toHaveBeenCalled();
 
@@ -287,7 +300,7 @@ describe('リマインダーセクション(日記を書く習慣化のための
         fireEvent.press(screen.getByLabelText(HOUR_INCREASE_LABEL));
       });
 
-      expect(screen.getByLabelText('時 22').props.accessibilityLiveRegion).toBe('polite');
+      expect(screen.getByLabelText('22時').props.accessibilityLiveRegion).toBe('polite');
       expect(announceSpy).not.toHaveBeenCalled();
     } finally {
       announceSpy.mockRestore();
@@ -302,7 +315,7 @@ describe('リマインダーセクション(日記を書く習慣化のための
     try {
       renderSettingsScreen();
 
-      const initialHour = screen.getByLabelText('時 21');
+      const initialHour = screen.getByLabelText('21時');
       expect(initialHour.props.accessibilityLiveRegion).toBeUndefined();
       expect(announceSpy).not.toHaveBeenCalled();
 
@@ -310,8 +323,8 @@ describe('リマインダーセクション(日記を書く習慣化のための
         fireEvent.press(screen.getByLabelText(HOUR_INCREASE_LABEL));
       });
 
-      expect(screen.getByLabelText('時 22').props.accessibilityLiveRegion).toBeUndefined();
-      expect(announceSpy).toHaveBeenCalledWith('時 22');
+      expect(screen.getByLabelText('22時').props.accessibilityLiveRegion).toBeUndefined();
+      expect(announceSpy).toHaveBeenCalledWith('22時');
     } finally {
       announceSpy.mockRestore();
     }

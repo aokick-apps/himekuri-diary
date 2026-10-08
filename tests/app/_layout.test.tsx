@@ -56,6 +56,11 @@ jest.mock('@/utils/app-lock-authentication', () => ({
   authenticateForAppLockAsync: jest.fn(() => Promise.resolve(true)),
 }));
 
+// 起動時の添付画像の掃除はネイティブのファイルシステムに依存するため、呼び出されたかだけを検証する
+jest.mock('@/utils/diary-image-cleanup', () => ({
+  cleanUpUnreferencedDiaryImagesAsync: jest.fn(() => Promise.resolve()),
+}));
+
 // 実物のexpo-notificationsは読み込むだけでExpo Go向けのPush通知警告を出しテスト出力を汚すため、
 // ラッパーごとモック化する(tests/app/settings.test.tsxと同じ方式)。
 jest.mock('@/utils/diary-reminder-notifications', () => ({
@@ -550,5 +555,17 @@ describe('RootLayoutのアプリロック画面表示制御', () => {
         await Promise.resolve();
       });
     });
+  });
+
+  it('cleans up unreferenced diary images once on startup (正常系: 起動時の掃除)', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { cleanUpUnreferencedDiaryImagesAsync } = require('@/utils/diary-image-cleanup') as {
+      cleanUpUnreferencedDiaryImagesAsync: jest.Mock;
+    };
+    cleanUpUnreferencedDiaryImagesAsync.mockClear();
+
+    render(<RootLayout />);
+
+    await waitFor(() => expect(cleanUpUnreferencedDiaryImagesAsync).toHaveBeenCalledTimes(1));
   });
 });

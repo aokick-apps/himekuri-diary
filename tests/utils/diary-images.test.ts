@@ -10,6 +10,7 @@ import {
   getRemovedDiaryImages,
   isDiaryImageAttachmentSupported,
   isSameDiaryImageDrafts,
+  listStoredDiaryImageFileNames,
   pickDiaryImageAsync,
   saveDiaryImage,
   toDiaryImageDrafts,
@@ -26,6 +27,9 @@ jest.mock('expo-file-system', () => {
     uri: string;
     constructor(...parts: (string | { uri: string })[]) {
       this.uri = join(parts);
+    }
+    get name() {
+      return this.uri.split('/').pop();
     }
     get exists() {
       return existing.has(this.uri);
@@ -50,6 +54,11 @@ jest.mock('expo-file-system', () => {
     }
     create() {
       existing.add(this.uri);
+    }
+    list() {
+      return [...existing]
+        .filter((path) => path.startsWith(`${this.uri}/`))
+        .map((path) => new MockFile(path));
     }
     delete() {
       for (const path of [...existing]) {
@@ -235,5 +244,18 @@ describe('draft helpers', () => {
     expect(isSameDiaryImageDrafts(stored, [{ kind: 'picked', uri: 'file:///tmp/a.jpg' }])).toBe(
       false,
     );
+  });
+});
+
+describe('listStoredDiaryImageFileNames', () => {
+  it('lists the file names in the image directory (正常系)', () => {
+    const a = saveDiaryImage('file:///tmp/a.jpg');
+    const b = saveDiaryImage('file:///tmp/b.png');
+
+    expect(listStoredDiaryImageFileNames().sort()).toEqual([a.fileName, b.fileName].sort());
+  });
+
+  it('returns an empty list before any image has been saved (境界値: ディレクトリ未作成)', () => {
+    expect(listStoredDiaryImageFileNames()).toEqual([]);
   });
 });

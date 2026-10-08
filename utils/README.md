@@ -14,6 +14,7 @@ utils/
   diary-import.ts                 JSONファイルから日記データをインポートするためのパース・検証
   diary-reminder-notifications.ts 日記リマインダー(毎日決まった時刻のローカル通知)の許可状態取得・スケジュール
   diary-images.ts                 日記の添付画像の選択・アプリ専用ディレクトリへの保存・削除
+  diary-image-cleanup.ts          どの日記からも参照されていない添付画像の起動時の掃除
   diary-search.ts                 日記本文の検索(表記ゆれの正規化・一致判定・検索結果の抜粋作成)
   diary-storage.ts                日記データ(DiaryEntry型)のAsyncStorageキー定義、暗号化した保存・取得・削除
   diary-text.ts                   日記本文の文字数上限と、書記素クラスタ単位での切り詰め
@@ -124,6 +125,9 @@ JSONファイルから日記データをインポート(再取り込み)する�
 - `DiaryImageDraft` / `toDiaryImageDrafts` / `commitDiaryImageDrafts`: 入力画面で編集中の添付画像です。選んだ時点ではコピーせず、保存時に`commitDiaryImageDrafts`で初めてコピーします(保存せずに閉じた場合に、参照されないファイルを残さないため)。コピーの途中で失敗した場合は、それまでにコピーした分を削除します。
 - `getRemovedDiaryImages(before, after)` / `isSameDiaryImageDrafts(a, b)`: 保存によって参照されなくなった画像の抽出と、未保存の変更があるかの判定です。
 - `deleteDiaryImages(images)` / `deleteAllDiaryImages()`: 添付画像のファイルを削除します。日記本体の操作を妨げないよう、失敗しても例外は投げずに警告だけ残します。日記を削除したときは、取り消し期限が過ぎた時点で消します。全件削除では、`clearAllDiaryEntries`がディレクトリごと消します。
+
+- `listStoredDiaryImageFileNames()`: 添付画像ディレクトリにあるファイル名の一覧です。
+- [`diary-image-cleanup.ts`](diary-image-cleanup.ts)の`cleanUpUnreferencedDiaryImagesAsync()`: どの日記からも参照されていない画像を削除します。削除の取り消し期限内にアプリが終了した場合や、同じidの日記を上書きインポートした場合に残った画像を片付けるため、[`app/_layout.tsx`](../app/_layout.tsx)が起動時に一度だけ呼びます。先にファイル一覧を取ってから日記を読むので、掃除中に新しく保存された画像は消しません。また、日記を全件読めなかった場合(読み込みエラー・一部破損)は、読めなかった日記の画像を消さないよう何もしません。
 
 添付画像のファイル自体は日記本文のように暗号化していません(OSのアプリごとのサンドボックスで保護されます)。また、エクスポートしたバックアップに含まれるのは参照だけで、画像本体は含まれません。
 

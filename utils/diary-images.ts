@@ -161,3 +161,18 @@ export function isSameDiaryImageDrafts(
 function getDiaryImageDraftKey(draft: DiaryImageDraft): string {
   return draft.kind === 'stored' ? `stored:${draft.image.fileName}` : `picked:${draft.uri}`;
 }
+
+/** 添付画像ディレクトリにある画像ファイル名の一覧。ディレクトリがまだ無い場合は空 */
+export function listStoredDiaryImageFileNames(): string[] {
+  if (!isDiaryImageAttachmentSupported()) {
+    return [];
+  }
+  const directory = getDiaryImagesDirectory();
+  if (!directory.exists) {
+    return [];
+  }
+  return directory
+    .list()
+    .filter((item): item is File => item instanceof File)
+    .map((file) => file.name);
+}

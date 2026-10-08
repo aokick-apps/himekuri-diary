@@ -38,15 +38,15 @@ function sortEntriesByCreatedAt(entries: DiaryEntry[]): DiaryEntry[] {
   });
 }
 
-// 指定した日付('YYYY-MM-DD')の日記一覧を表示する専用画面。
-// カレンダー画面のモーダルではなく独立した画面にすることで、削除時のフェードアウトや
-// 編集画面への遷移を画面単位で扱えるようにしている。
 // 検索結果から遷移した日記を強調表示しておく時間(ミリ秒)
 const HIGHLIGHT_DURATION_MS = 4000;
 // 強調する日記を画面のどの高さに表示するか(0: 上端〜1: 下端)。直前の日記も少し見えるようにする
 const HIGHLIGHT_VIEW_POSITION = 0.2;
 const SCROLL_RETRY_DELAY_MS = 100;
 
+// 指定した日付('YYYY-MM-DD')の日記一覧を表示する専用画面。
+// カレンダー画面のモーダルではなく独立した画面にすることで、削除時のフェードアウトや
+// 編集画面への遷移を画面単位で扱えるようにしている。
 export default function DayEntriesScreen() {
   const { date, highlightEntryId } = useLocalSearchParams<{
     date: string;

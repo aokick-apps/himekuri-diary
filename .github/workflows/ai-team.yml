@@ -222,8 +222,8 @@ jobs:
                 サブエージェントからの応答異常、ツール実行エラー、3の確認でブランチが
                 見つからなかった、など理由を問わない)、終了する前に必ず次を実行すること:
                 `gh issue comment ${{ steps.sanitize.outputs.issue_number }} --body "<ここまでの作業状況・どの手順まで進んだか・中断した理由(推測でよい)・人間が確認すべき点>"`
-                このとき、直前まで設定していた Status(In Progress または Under Review)は
-                変更せずそのままにする(Todo や Done には絶対に変更しない)。
+                このとき対象Issueの Status は変更しない(Todo や Done には絶対に変更しない。
+                Status はセッション終了後にワークフローが更新する)。
             16. 最後に、対応したIssue番号、作成したPRのURL、reviewerのレビュー結果
                 (LGTM相当/要修正の経緯と回数)、designerを呼び出した場合はその判定結果、
                 新規に起票したIssue(あれば)を日本語でレポートする。
@@ -250,7 +250,7 @@ jobs:
           ISSUE_NUMBER: ${{ steps.sanitize.outputs.issue_number }}
           ITEM_ID: ${{ steps.project_item.outputs.item_id }}
         run: |
-          pr_count="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --limit 100 \
+          pr_count="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --limit 1000 \
             --json closingIssuesReferences \
             --jq "[.[] | select(any(.closingIssuesReferences[]; .number == $ISSUE_NUMBER))] | length")"
           if [ "$pr_count" = "0" ]; then

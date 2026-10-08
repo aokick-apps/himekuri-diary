@@ -13,6 +13,7 @@ utils/
   diary-export.ts                 日記データをJSONとしてエクスポートするためのファイル名生成・シリアライズ
   diary-import.ts                 JSONファイルから日記データをインポートするためのパース・検証
   diary-reminder-notifications.ts 日記リマインダー(毎日決まった時刻のローカル通知)の許可状態取得・スケジュール
+  diary-search.ts                 日記本文の検索(表記ゆれの正規化・一致判定・検索結果の抜粋作成)
   diary-storage.ts                日記データ(DiaryEntry型)のAsyncStorageキー定義、暗号化した保存・取得・削除
   diary-text.ts                   日記本文の文字数上限と、書記素クラスタ単位での切り詰め
   onboarding-storage.ts           オンボーディング表示済みフラグのAsyncStorageキー定義、および読み書き
@@ -86,6 +87,16 @@ JSONファイルから日記データをインポート(再取り込み)する�
 - `cancelDailyReminderAsync()`: スケジュール済みの通知をキャンセルします。未登録の状態で呼んでも例外にはなりません。
 
 このファイルは読み込み時に、フォアグラウンド中でも通知をバナー表示するための通知ハンドラーを登録します。[`contexts/diary-reminder-context.tsx`](../contexts/diary-reminder-context.tsx)から利用されます。
+
+## `diary-search.ts` の構成
+
+ホーム画面の日記検索で使う、UIに依存しない検索ロジックです。
+
+- `normalizeForSearch(text)`: NFKC正規化(全角/半角)とひらがな→カタカナ変換(`hiraganaToKatakana`)で表記ゆれを吸収した文字列と、正規化後の各位置が元の文字列のどこに対応するかを表す位置マップ(`startMap`/`endMap`)を返します。大文字/小文字は呼び出し側で`toLowerCase()`しておきます。
+- `matchesSearchQuery(text, query)`: 本文が検索キーワードに部分一致するかを、`normalizeForSearch`と同じ規則で判定します。
+- `getSearchExcerpt(text, query)`: マッチ箇所の前後20文字を抜粋して`prefix`/`match`/`suffix`に分けます。切り詰めた側には省略記号を付けます。一致しない場合は、本文の先頭を書記素単位で切り詰めた文字列を返します。
+
+[`app/(tabs)/index.tsx`](<../app/(tabs)/index.tsx>)から利用されます。
 
 ## `diary-storage.ts` の構成
 

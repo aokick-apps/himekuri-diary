@@ -18,6 +18,8 @@ utils/
   diary-images.ts                 日記の添付画像の選択・アプリ専用ディレクトリへの保存・削除
   diary-image-cleanup.ts          どの日記からも参照されていない添付画像の起動時の掃除
   diary-search.ts                 日記本文の検索(表記ゆれの正規化・一致判定・検索結果の抜粋作成)
+  diary-entries-by-date.ts        日記を日付キーごとにまとめ、各日付内を時刻の昇順に揃える(ホーム画面のカレンダー表示用)
+  save-feedback.ts                保存成功時の触覚フィードバック(iOSのみ)
   diary-storage.ts                日記データ(DiaryEntry型)のAsyncStorageキー定義、暗号化した保存・取得・削除
   diary-text.ts                   日記本文の文字数上限と、書記素クラスタ単位での切り詰め
   onboarding-storage.ts           オンボーディング表示済みフラグのAsyncStorageキー定義、および読み書き

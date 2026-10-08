@@ -1,6 +1,5 @@
 import { HeaderHeightContext } from '@react-navigation/elements';
 import type { NavigationAction } from '@react-navigation/native';
-import * as Haptics from 'expo-haptics';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -41,6 +40,7 @@ import {
   saveDiaryEntry,
   type DiaryEntry,
 } from '@/utils/diary-storage';
+import { notifySaveSuccessHaptics } from '@/utils/save-feedback';
 
 // 保存成功のトーストを表示してから前の画面へ戻るまでの待ち時間(ミリ秒)。
 // 遷移が早すぎると保存できたかを確認できないため、トーストを読める長さだけ画面に留める
@@ -231,9 +231,7 @@ export default function EditEntryScreen() {
         // 戻る操作・トーストの「戻る」は残りの待機を打ち切り、すぐに前の画面へ戻す
         setSaveToastMessage(SAVE_SUCCESS_MESSAGE);
         // ホーム画面の保存成功時と同じ触覚フィードバックで一貫させる
-        if (process.env.EXPO_OS === 'ios') {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        }
+        notifySaveSuccessHaptics();
         await new Promise<void>((resolve) => {
           const timer = setTimeout(resolve, NAVIGATE_BACK_DELAY_AFTER_SAVE_MS);
           cancelNavigateBackDelayRef.current = () => {

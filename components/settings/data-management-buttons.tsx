@@ -2,7 +2,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Platform, Pressable, StyleSheet } from 'react-native';
+import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, View } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
 import { useThemeColor } from '@/hooks/use-theme-color';
@@ -20,6 +20,27 @@ import {
 
 // 保存済みの日記データ(AsyncStorage上の全件)を削除する操作導線。
 // Google Play/Apple双方のストア審査で求められる「ユーザーによるデータ削除手段」に対応する
+// 処理中はスピナーと進行中の文言に切り替え、他の保存ボタンと同じく実行中であることを明示する
+function DataTransferButtonLabel({
+  label,
+  busyLabel,
+}: {
+  label: string;
+  busyLabel: string | null;
+}) {
+  const linkColor = useThemeColor({}, 'link');
+
+  if (busyLabel === null) {
+    return <ThemedText type="link">{label}</ThemedText>;
+  }
+  return (
+    <View style={styles.busyContent}>
+      <ActivityIndicator size="small" color={linkColor} />
+      <ThemedText type="link">{busyLabel}</ThemedText>
+    </View>
+  );
+}
+
 export function DeleteAllDiaryDataButton() {
   const [isDeleting, setIsDeleting] = useState(false);
   const errorColor = useThemeColor({}, 'error');
@@ -158,10 +179,14 @@ export function ExportDiaryDataButton() {
       onPress={handleExport}
       disabled={isExporting}
       accessibilityRole="button"
-      accessibilityState={{ disabled: isExporting }}
+      accessibilityLabel="日記データをエクスポート"
+      accessibilityState={{ disabled: isExporting, busy: isExporting }}
       style={[styles.exportButton, { opacity: isExporting ? 0.5 : 1 }]}
     >
-      <ThemedText type="link">日記データをエクスポート</ThemedText>
+      <DataTransferButtonLabel
+        label="日記データをエクスポート"
+        busyLabel={isExporting ? 'エクスポート中...' : null}
+      />
     </Pressable>
   );
 }
@@ -171,6 +196,10 @@ export function ExportDiaryDataButton() {
 // `saveDiaryEntry`がidをキーに個別保存するため、この上書き挙動は特別な実装なしに実現できる
 export function ImportDiaryDataButton() {
   const [isImporting, setIsImporting] = useState(false);
+  // ファイル選択・確認ダイアログの間は含めず、実際に保存している間だけ進捗を表示する
+  const [importProgress, setImportProgress] = useState<{ done: number; total: number } | null>(
+    null,
+  );
 
   const importEntries = useCallback(async (entries: DiaryEntry[]) => {
     // 逐次保存のため、途中で失敗しても直前までのエントリは保存済みのまま残る。
@@ -179,9 +208,11 @@ export function ImportDiaryDataButton() {
     try {
       // 暗号鍵未生成の状態で並列保存すると、各呼び出しが別々の鍵を生成し合って
       // 書き込みを取り合い、データが消失し得るため、あえて逐次保存にしている
+      setImportProgress({ done: 0, total: entries.length });
       for (const entry of entries) {
         await saveDiaryEntry(entry);
         succeededCount += 1;
+        setImportProgress({ done: succeededCount, total: entries.length });
       }
       Alert.alert('インポートが完了しました', `${entries.length}件の日記データを取り込みました。`);
     } catch {
@@ -190,6 +221,7 @@ export function ImportDiaryDataButton() {
         `${entries.length}件中${succeededCount}件を取り込んだ時点で失敗しました。もう一度お試しください。`,
       );
     } finally {
+      setImportProgress(null);
       setIsImporting(false);
     }
   }, []);
@@ -259,15 +291,33 @@ export function ImportDiaryDataButton() {
       onPress={handlePress}
       disabled={isImporting}
       accessibilityRole="button"
-      accessibilityState={{ disabled: isImporting }}
+      accessibilityLabel="日記データをインポート"
+      accessibilityState={{ disabled: isImporting, busy: importProgress !== null }}
+      accessibilityValue={
+        importProgress
+          ? { text: `${importProgress.total}件中${importProgress.done}件を取り込み済み` }
+          : undefined
+      }
       style={[styles.exportButton, { opacity: isImporting ? 0.5 : 1 }]}
     >
-      <ThemedText type="link">日記データをインポート</ThemedText>
+      <DataTransferButtonLabel
+        label="日記データをインポート"
+        busyLabel={
+          importProgress
+            ? `インポート中... (${importProgress.done}/${importProgress.total}件)`
+            : null
+        }
+      />
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
+  busyContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   exportButton: {
     alignSelf: 'flex-start',
   },

@@ -5,7 +5,15 @@ import * as SecureStore from 'expo-secure-store';
 import * as Sharing from 'expo-sharing';
 import type { PropsWithChildren } from 'react';
 import React from 'react';
-import { AccessibilityInfo, Alert, Platform, ScrollView, StyleSheet, Text } from 'react-native';
+import {
+  AccessibilityInfo,
+  ActivityIndicator,
+  Alert,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+} from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import SettingsScreen from '@/app/(tabs)/settings';
@@ -849,6 +857,36 @@ describe('日記データをエクスポートボタン(データ管理セクシ
     ).toEqual(expect.objectContaining({ disabled: false }));
   });
 
+  it('shows a spinner with "エクスポート中..." while exporting, keeping the button\'s accessible name and marking it busy (処理中の表示)', async () => {
+    jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    await AsyncStorage.setItem(DIARY_ENTRIES_STORAGE_KEY, sampleEntriesJson);
+    let resolveIsAvailable: (value: boolean) => void = () => {};
+    (Sharing.isAvailableAsync as jest.Mock).mockReturnValue(
+      new Promise<boolean>((resolve) => {
+        resolveIsAvailable = resolve;
+      }),
+    );
+    render(<SettingsScreen />);
+    expect(screen.queryByText('エクスポート中...')).toBeNull();
+
+    fireEvent.press(screen.getByText(EXPORT_BUTTON_LABEL));
+
+    const button = screen.getByRole('button', { name: EXPORT_BUTTON_LABEL });
+    expect(within(button).getByText('エクスポート中...')).toBeTruthy();
+    expect(within(button).UNSAFE_getAllByType(ActivityIndicator)).toHaveLength(1);
+    expect(button.props.accessibilityState).toEqual(expect.objectContaining({ busy: true }));
+
+    await act(async () => {
+      resolveIsAvailable(true);
+    });
+
+    await waitFor(() => expect(screen.queryByText('エクスポート中...')).toBeNull());
+    const buttonAfter = screen.getByRole('button', { name: EXPORT_BUTTON_LABEL });
+    expect(within(buttonAfter).getByText(EXPORT_BUTTON_LABEL)).toBeTruthy();
+    expect(within(buttonAfter).UNSAFE_queryAllByType(ActivityIndicator)).toHaveLength(0);
+    expect(buttonAfter.props.accessibilityState).toEqual(expect.objectContaining({ busy: false }));
+  });
+
   it('shows a failure alert when the cache directory is unavailable (境界値: Paths.cacheが取得できない場合)', async () => {
     jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     await AsyncStorage.setItem(DIARY_ENTRIES_STORAGE_KEY, sampleEntriesJson);
@@ -1484,6 +1522,43 @@ describe('日記データをインポートボタン(データ管理セクショ
       expect(button.props.accessibilityState).toEqual(expect.objectContaining({ disabled: false }));
       expect(StyleSheet.flatten(button.props.style).opacity).toBe(1);
       expect(AsyncStorage.setItem).not.toHaveBeenCalled();
+    });
+
+    it('does not show the import progress while only the confirmation dialog is open (境界値: 保存開始前は進捗を出さない)', async () => {
+      await openConfirmDialog();
+
+      const button = screen.getByRole('button', { name: IMPORT_BUTTON_LABEL });
+      expect(within(button).getByText(IMPORT_BUTTON_LABEL)).toBeTruthy();
+      expect(screen.queryByText(/インポート中/)).toBeNull();
+      expect(button.props.accessibilityState).toEqual(expect.objectContaining({ busy: false }));
+    });
+
+    it('shows a spinner with the saved/total count while the confirmed import is saving, then restores the label (処理中の表示: 進捗件数)', async () => {
+      await openConfirmDialog();
+      let resolveSave: () => void = () => {};
+      jest.spyOn(AsyncStorage, 'setItem').mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveSave = resolve;
+          }),
+      );
+
+      await pressAlertButtonByLabel('取り込む');
+
+      const button = screen.getByRole('button', { name: IMPORT_BUTTON_LABEL });
+      expect(within(button).getByText('インポート中... (0/1件)')).toBeTruthy();
+      expect(within(button).UNSAFE_getAllByType(ActivityIndicator)).toHaveLength(1);
+      expect(button.props.accessibilityState).toEqual(expect.objectContaining({ busy: true }));
+      expect(button.props.accessibilityValue?.text).toBe('1件中0件を取り込み済み');
+
+      await act(async () => {
+        resolveSave();
+      });
+
+      await waitFor(() => expect(screen.queryByText(/インポート中/)).toBeNull());
+      const buttonAfter = screen.getByRole('button', { name: IMPORT_BUTTON_LABEL });
+      expect(within(buttonAfter).getByText(IMPORT_BUTTON_LABEL)).toBeTruthy();
+      expect(buttonAfter.props.accessibilityValue?.text).toBeUndefined();
     });
 
     it('keeps the button disabled while the confirmed import is still saving, then restores it once finished (境界値: 取り込み中は無効のまま)', async () => {

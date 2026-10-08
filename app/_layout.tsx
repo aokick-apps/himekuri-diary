@@ -103,15 +103,14 @@ function RootLayoutContent() {
         onDisableAppLock={handleDisableAppLock}
       />
       {/* ロック設定(AsyncStorage)読み込み中はenabled/isUnlockedが暫定値のため、未ロック扱いのまま
-          下のタブ画面を先に描画すると日記データが一瞬見えてしまう。認証はせず読み込み完了を待つだけの表示 */}
-      <Modal
-        visible={!isAppLockReady}
-        animationType="none"
-        statusBarTranslucent
-        navigationBarTranslucent
-      >
-        <ThemedView testID={APP_LOCK_LOADING_OVERLAY_TEST_ID} style={styles.loadingContainer} />
-      </Modal>
+          下のタブ画面を先に描画すると日記データが一瞬見えてしまう。認証はせず読み込み完了を待つだけの表示。
+          起動直後の最初の描画で表示するため、ウィンドウ準備前の表示に失敗しうるModalではなくViewで覆う */}
+      {!isAppLockReady ? (
+        <ThemedView
+          testID={APP_LOCK_LOADING_OVERLAY_TEST_ID}
+          style={[StyleSheet.absoluteFill, styles.loadingContainer]}
+        />
+      ) : null}
       {/* 'inactive'遷移(アプリスイッチャーを開いた瞬間)のシステムスナップショット撮影前にコンテンツを覆い隠す。
           isUnlockedがfalse(既にAppLockScreenで覆われている)場合は二重表示になるため対象外とする */}
       <Modal

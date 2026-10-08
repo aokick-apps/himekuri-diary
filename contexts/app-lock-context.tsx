@@ -85,17 +85,17 @@ export function AppLockProvider({ children }: PropsWithChildren) {
   // 端末側で生体認証・パスコードの登録がすべて削除されると、ONのままの設定が二度と解除できない
   // ロック画面を生み出してしまう。isAppLockSupportedAsync()の結果は変化しうる値として扱い、
   // マウント時だけでなくAppState経由でも再取得できるよう関数として切り出す
-  const refreshIsSupported = useCallback(async () => {
+  const refreshIsSupported = useCallback(async (): Promise<boolean> => {
+    let supported = false;
     try {
-      const supported = await isAppLockSupportedAsync();
-      if (isMountedRef.current) {
-        setIsSupported(supported);
-      }
+      supported = await isAppLockSupportedAsync();
     } catch {
-      if (isMountedRef.current) {
-        setIsSupported(false);
-      }
+      supported = false;
     }
+    if (isMountedRef.current) {
+      setIsSupported(supported);
+    }
+    return supported;
   }, []);
 
   useEffect(() => {
@@ -182,14 +182,14 @@ export function AppLockProvider({ children }: PropsWithChildren) {
   }, []);
 
   // 起動時に読み込んだ設定が既にON(ロック済み)状態だった場合、AppLockScreenの手動ボタンを
-  // 待たずに自動で認証プロンプトを起動する。isReadyがfalse→trueに
-  // 変化した瞬間だけ判定したいため、依存配列はisReadyのみとし、enabled/isUnlockedは
-  // refから読む(値そのものを依存配列に含めるとbackground遷移等の後続の変化でも再実行されてしまう)
+  // 待たずに自動で認証プロンプトを起動する。認証手段が無い端末では脱出導線の表示を優先するため
+  // isSupportedも条件に含める。enabled/isUnlockedはrefから読み、background遷移等の後続の変化では
+  // 再実行しない
   useEffect(() => {
-    if (isReady && enabledRef.current && !isUnlockedRef.current) {
+    if (isReady && isSupported && enabledRef.current && !isUnlockedRef.current) {
       authenticate();
     }
-  }, [isReady, authenticate]);
+  }, [isReady, isSupported, authenticate]);
 
   // バックグラウンドへ完全に遷移したタイミングでロックし直す。'inactive'は生体認証プロンプトの
   // 表示中にも一時的に発生する状態のため、これを含めると認証ダイアログを開いた瞬間に
@@ -209,13 +209,14 @@ export function AppLockProvider({ children }: PropsWithChildren) {
         // バックグラウンド中に端末側の生体認証・パスコード設定が削除されている可能性があるため、
         // active復帰のたびにisSupportedを再取得する。認証手段が失われていた場合、
         // 更新されたisSupportedを見たAppLockScreen側が脱出導線(アプリロックのOFF)を表示する
-        refreshIsSupported();
         // フォアグラウンド復帰時のみ自動で認証プロンプトを起動する。'background'遷移の
         // 瞬間(画面が暗転していく過程)に起動するとOS標準パスコード入力へフォールバック
-        // してしまうため、必ず'active'に戻った時点で判定する
-        if (enabledRef.current && !isUnlockedRef.current) {
-          authenticate();
-        }
+        // してしまうため、必ず'active'に戻った時点で、再取得した最新のisSupportedを見て判定する
+        refreshIsSupported().then((supported) => {
+          if (supported && enabledRef.current && !isUnlockedRef.current) {
+            authenticate();
+          }
+        });
       }
     };
 

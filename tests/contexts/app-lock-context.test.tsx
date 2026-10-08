@@ -387,6 +387,70 @@ describe('AppLockProvider / useAppLock', () => {
 
       expect(mockedAuthenticationUtil.authenticateForAppLockAsync).not.toHaveBeenCalled();
     });
+
+    it('does not call authenticateForAppLockAsync on launch when the device has no authentication enrolled (異常系: 起動時に認証手段が無い端末では自動認証しない)', async () => {
+      await AsyncStorage.setItem(APP_LOCK_ENABLED_STORAGE_KEY, 'true');
+      mockedAuthenticationUtil.isAppLockSupportedAsync.mockResolvedValue(false);
+
+      const { result } = renderHook(() => useAppLock(), { wrapper });
+
+      await waitFor(() => expect(result.current.isReady).toBe(true));
+      await waitFor(() =>
+        expect(mockedAuthenticationUtil.isAppLockSupportedAsync).toHaveBeenCalled(),
+      );
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(result.current.isSupported).toBe(false);
+      expect(result.current.isUnlocked).toBe(false);
+      expect(mockedAuthenticationUtil.authenticateForAppLockAsync).not.toHaveBeenCalled();
+    });
+
+    it('still calls authenticateForAppLockAsync once on launch when the support check resolves after the stored setting (境界値: isSupportedの判定がisReadyより遅れて確定する場合)', async () => {
+      await AsyncStorage.setItem(APP_LOCK_ENABLED_STORAGE_KEY, 'true');
+      let resolveSupported: (value: boolean) => void = () => {};
+      mockedAuthenticationUtil.isAppLockSupportedAsync.mockReturnValue(
+        new Promise<boolean>((resolve) => {
+          resolveSupported = resolve;
+        }),
+      );
+
+      const { result } = renderHook(() => useAppLock(), { wrapper });
+      await waitFor(() => expect(result.current.isReady).toBe(true));
+      expect(mockedAuthenticationUtil.authenticateForAppLockAsync).not.toHaveBeenCalled();
+
+      await act(async () => {
+        resolveSupported(true);
+      });
+
+      await waitFor(() =>
+        expect(mockedAuthenticationUtil.authenticateForAppLockAsync).toHaveBeenCalledTimes(1),
+      );
+    });
+
+    it('does not call authenticateForAppLockAsync when returning to active after device authentication was removed in the background (異常系: バックグラウンド中に認証手段が失われた場合は脱出導線を優先)', async () => {
+      const { result } = renderHook(() => useAppLock(), { wrapper });
+      await act(async () => {
+        await Promise.resolve();
+      });
+      await act(async () => {
+        await result.current.setEnabled(true);
+      });
+      const handleAppStateChange = getAppStateChangeListener();
+      act(() => {
+        handleAppStateChange('background');
+      });
+      mockedAuthenticationUtil.isAppLockSupportedAsync.mockResolvedValue(false);
+
+      await act(async () => {
+        handleAppStateChange('active');
+      });
+
+      await waitFor(() => expect(result.current.isSupported).toBe(false));
+      expect(result.current.isUnlocked).toBe(false);
+      expect(mockedAuthenticationUtil.authenticateForAppLockAsync).not.toHaveBeenCalled();
+    });
   });
 
   describe('AppStateによるバックグラウンド遷移時の再ロック', () => {

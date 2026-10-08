@@ -110,6 +110,7 @@ describe('writeDiaryBackupFile', () => {
     });
     expect(JSON.parse(lines[1])).toEqual({
       image: 'a.jpg',
+      index: 0,
       data: Buffer.from(photo).toString('base64'),
       last: true,
     });
@@ -277,8 +278,8 @@ describe('readDiaryBackupForImport / restoreImages', () => {
         entries,
         ['a.jpg', 'unused.jpg'],
         [
-          { image: 'unused.jpg', data: b64(makeBytes(3)), last: true },
-          { image: 'a.jpg', data: b64(makeBytes(3)), last: true },
+          { image: 'unused.jpg', index: 0, data: b64(makeBytes(3)), last: true },
+          { image: 'a.jpg', index: 0, data: b64(makeBytes(3)), last: true },
         ],
       ),
     );
@@ -299,8 +300,8 @@ describe('readDiaryBackupForImport / restoreImages', () => {
         entries,
         ['a.jpg', '../evil.jpg'],
         [
-          { image: '../evil.jpg', data: b64(makeBytes(3)), last: true },
-          { image: 'sub/evil.jpg', data: b64(makeBytes(3)), last: true },
+          { image: '../evil.jpg', index: 0, data: b64(makeBytes(3)), last: true },
+          { image: 'sub/evil.jpg', index: 0, data: b64(makeBytes(3)), last: true },
         ],
       ),
     );
@@ -319,13 +320,13 @@ describe('readDiaryBackupForImport / restoreImages', () => {
         entries,
         ['bad.jpg', 'good.jpg', 'junk.jpg'],
         [
-          { image: 'bad.jpg', data: b64(makeBytes(3)) },
-          { image: 'bad.jpg', data: 'not base64!', last: true },
+          { image: 'bad.jpg', index: 0, data: b64(makeBytes(3)) },
+          { image: 'bad.jpg', index: 1, data: 'not base64!', last: true },
           '',
-          { image: 'good.jpg', data: b64(makeBytes(4)), last: true },
-          { image: 'junk.jpg', data: b64(makeBytes(3)) },
+          { image: 'good.jpg', index: 0, data: b64(makeBytes(4)), last: true },
+          { image: 'junk.jpg', index: 0, data: b64(makeBytes(3)) },
           'this line is not json',
-          { image: 'junk.jpg', data: b64(makeBytes(3)), last: true },
+          { image: 'junk.jpg', index: 0, data: b64(makeBytes(3)), last: true },
         ],
       ),
     );
@@ -347,8 +348,8 @@ describe('readDiaryBackupForImport / restoreImages', () => {
         entries,
         ['a.jpg', 'b.jpg'],
         [
-          { image: 'a.jpg', data: b64(makeBytes(3)) },
-          { image: 'b.jpg', data: b64(makeBytes(3)) },
+          { image: 'a.jpg', index: 0, data: b64(makeBytes(3)) },
+          { image: 'b.jpg', index: 0, data: b64(makeBytes(3)) },
         ],
       ),
     );
@@ -367,8 +368,8 @@ describe('readDiaryBackupForImport / restoreImages', () => {
         entries,
         ['a.jpg'],
         [
-          { image: 'a.jpg', data: b64(makeBytes(3)) },
-          { image: 'a.jpg', data: b64(makeBytes(3)), last: true },
+          { image: 'a.jpg', index: 0, data: b64(makeBytes(3)) },
+          { image: 'a.jpg', index: 0, data: b64(makeBytes(3)), last: true },
         ],
       ),
     );
@@ -403,7 +404,7 @@ describe('readDiaryBackupForImport / restoreImages', () => {
       const content = buildBackup(
         entries,
         ['a.jpg'],
-        [{ image: 'a.jpg', data: b64(makeBytes(3)), last: true }],
+        [{ image: 'a.jpg', index: 0, data: b64(makeBytes(3)), last: true }],
       );
       const file = new Blob([content as unknown as BlobPart]);
 
@@ -434,5 +435,150 @@ describe('readDiaryBackupForImport / restoreImages', () => {
 
       expect(backup.validEntries).toEqual(entries);
     });
+  });
+});
+
+describe('restoreImages の堅牢性', () => {
+  const TEMP_DIR = 'file:///cache/diary-backup-restore';
+  const b64 = (bytes: Uint8Array) => Buffer.from(bytes).toString('base64');
+
+  function backupWith(names: string[], lines: unknown[]): Uint8Array {
+    const header = JSON.stringify({
+      format: 'diary-backup',
+      version: 2,
+      entries: [entry('1', names)],
+      images: names,
+    });
+    const body = lines.map((l) => (typeof l === 'string' ? l : JSON.stringify(l)));
+    return utf8([header, ...body, ''].join('\n'));
+  }
+
+  const filesUnder = (dir: string) => [...fs.__files.keys()].filter((u) => u.startsWith(`${dir}/`));
+
+  async function open(bytes: Uint8Array) {
+    fs.__files.set(PICKED_URI, bytes);
+    return readDiaryBackupForImport(pickedAsset() as never);
+  }
+
+  it('treats an image whose first chunk is broken as failed even if later chunks arrive (連番の検証: 先頭欠け)', async () => {
+    const backup = await open(
+      backupWith(
+        ['a.jpg'],
+        ['broken line', { image: 'a.jpg', index: 1, data: b64(makeBytes(3)), last: true }],
+      ),
+    );
+
+    expect(await backup.restoreImages()).toBe(1);
+    expect(filesUnder(IMAGES_DIR)).toEqual([]);
+    expect(filesUnder(TEMP_DIR)).toEqual([]);
+  });
+
+  it('treats a gap or a repeat in the chunk numbers as failed (連番の検証: 欠番・重複)', async () => {
+    const backup = await open(
+      backupWith(
+        ['gap.jpg', 'dup.jpg'],
+        [
+          { image: 'gap.jpg', index: 0, data: b64(makeBytes(3)) },
+          { image: 'gap.jpg', index: 2, data: b64(makeBytes(3)), last: true },
+          { image: 'dup.jpg', index: 0, data: b64(makeBytes(3)) },
+          { image: 'dup.jpg', index: 0, data: b64(makeBytes(3)), last: true },
+        ],
+      ),
+    );
+
+    expect(await backup.restoreImages()).toBe(2);
+    expect(filesUnder(IMAGES_DIR)).toEqual([]);
+    expect(filesUnder(TEMP_DIR)).toEqual([]);
+  });
+
+  it('writes temp files outside the image directory and never touches an existing image named like a temp file (一時ファイルの衝突回避)', async () => {
+    fs.__files.set(`${IMAGES_DIR}/a.partial`, utf8('existing'));
+    const backup = await open(
+      backupWith(
+        ['a'],
+        [
+          { image: 'a', index: 0, data: b64(makeBytes(3)) },
+          { image: 'a', index: 1, data: 'not base64!', last: true },
+        ],
+      ),
+    );
+
+    expect(await backup.restoreImages()).toBe(1);
+    expect(fs.__files.get(`${IMAGES_DIR}/a.partial`)).toEqual(utf8('existing'));
+    expect(filesUnder(IMAGES_DIR)).toEqual([`${IMAGES_DIR}/a.partial`]);
+  });
+
+  it('empties leftover temp files from an earlier run before restoring (前回の一時ファイルの後始末)', async () => {
+    fs.__directories.add(TEMP_DIR);
+    fs.__files.set(`${TEMP_DIR}/leftover.partial`, utf8('x'));
+    const backup = await open(
+      backupWith(['a.jpg'], [{ image: 'a.jpg', index: 0, data: b64(makeBytes(3)), last: true }]),
+    );
+
+    expect(await backup.restoreImages()).toBe(0);
+    expect(filesUnder(TEMP_DIR)).toEqual([]);
+  });
+
+  it('closes the in-progress file and removes its temp file when reading the backup fails midway (異常系: 読み込み途中の例外)', async () => {
+    const chunk = DIARY_BACKUP_IMAGE_CHUNK_BYTES;
+    putImage('a.jpg', makeBytes(chunk * 3));
+    const exported = await exportToCache([entry('1', ['a.jpg'])]);
+    fs.__files.delete(`${IMAGES_DIR}/a.jpg`);
+    const backup = await open(exported);
+    const originalOpen = fs.File.prototype.open;
+    jest.spyOn(fs.File.prototype, 'open').mockImplementation(function (this: { uri: string }) {
+      const handle = originalOpen.call(this);
+      let calls = 0;
+      const originalRead = handle.readBytes.bind(handle);
+      handle.readBytes = (length: number) => {
+        calls += 1;
+        if (calls >= 3) {
+          throw new Error('read failed');
+        }
+        return originalRead(length);
+      };
+      return handle;
+    });
+
+    await expect(backup.restoreImages()).rejects.toThrow('read failed');
+    expect(filesUnder(TEMP_DIR)).toEqual([]);
+    expect(filesUnder(IMAGES_DIR)).toEqual([]);
+  });
+
+  it('closes the file once and removes the temp file when moving into place fails (異常系: 移動の失敗)', async () => {
+    const backup = await open(
+      backupWith(['a.jpg'], [{ image: 'a.jpg', index: 0, data: b64(makeBytes(3)), last: true }]),
+    );
+    jest.spyOn(fs.File.prototype, 'move').mockImplementation(() => {
+      throw new Error('move failed');
+    });
+
+    expect(await backup.restoreImages()).toBe(1);
+    expect(filesUnder(TEMP_DIR)).toEqual([]);
+    expect(filesUnder(IMAGES_DIR)).toEqual([]);
+  });
+
+  it('fails instead of reading the whole file when a v2 header line is broken (壊れたヘッダー)', async () => {
+    fs.__files.set(PICKED_URI, utf8('{"format":"diary-backup","version":2,"entries":[\n{}\n'));
+    const textSpy = jest.spyOn(fs.File.prototype, 'text');
+
+    await expect(readDiaryBackupForImport(pickedAsset() as never)).rejects.toThrow();
+    expect(textSpy).not.toHaveBeenCalled();
+  });
+
+  it('logs a warning and falls back to reading the whole file when the first line cannot be read (先頭行の読み込み失敗)', async () => {
+    const entries = [entry('1', [])];
+    fs.__files.set(PICKED_URI, utf8(JSON.stringify(entries, null, 2)));
+    jest.spyOn(fs.File.prototype, 'open').mockImplementation(() => {
+      throw new Error('open failed');
+    });
+
+    const backup = await readDiaryBackupForImport(pickedAsset() as never);
+
+    expect(backup.validEntries).toEqual(entries);
+    expect(console.warn).toHaveBeenCalledWith(
+      expect.stringContaining('readFirstLineOfNativeFile'),
+      expect.any(Error),
+    );
   });
 });

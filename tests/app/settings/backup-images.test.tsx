@@ -76,7 +76,9 @@ const entryWithImage = {
 const utf8 = (text: string) => new TextEncoder().encode(text);
 
 function backupBytes(
-  images: object[] = [{ image: 'a.jpg', data: Buffer.from(photo).toString('base64'), last: true }],
+  images: object[] = [
+    { image: 'a.jpg', index: 0, data: Buffer.from(photo).toString('base64'), last: true },
+  ],
 ) {
   const header = JSON.stringify({
     format: 'diary-backup',
@@ -146,6 +148,7 @@ describe('添付写真を含む日記データのエクスポート/インポー
     });
     expect(JSON.parse(lines[1])).toEqual({
       image: 'a.jpg',
+      index: 0,
       data: Buffer.from(photo).toString('base64'),
       last: true,
     });
@@ -187,7 +190,7 @@ describe('添付写真を含む日記データのエクスポート/インポー
 
   it('reports photos that could not be restored while still importing the entries (インポート: 画像の一部が復元できない場合)', async () => {
     jest.spyOn(console, 'warn').mockImplementation(() => {});
-    await startImport(backupBytes([{ image: 'a.jpg', data: 'not base64!', last: true }]));
+    await startImport(backupBytes([{ image: 'a.jpg', index: 0, data: 'not base64!', last: true }]));
 
     await pressAlertButton('取り込む');
 
@@ -261,7 +264,7 @@ describe('添付写真を含む日記データのエクスポート/インポー
       entries: [evil],
       images: ['../../evil.jpg'],
     });
-    const line = JSON.stringify({ image: '../../evil.jpg', data: 'AQID', last: true });
+    const line = JSON.stringify({ image: '../../evil.jpg', index: 0, data: 'AQID', last: true });
     await startImport(utf8(`${header}\n${line}\n`));
 
     expect((Alert.alert as jest.Mock).mock.calls[0][0]).toBe(

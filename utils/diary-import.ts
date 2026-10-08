@@ -34,6 +34,8 @@ function extractReferencedImageFileNames(rawNames: unknown, entries: DiaryEntry[
 /** 画像入りバックアップの2行目以降にある、画像の断片1つ分。 */
 export type DiaryBackupImageChunk = {
   fileName: string;
+  /** 画像内での0始まりの連番。 */
+  index: number;
   /** Base64として妥当であることを検証済みの断片。 */
   data: string;
   /** その画像の最後の断片か。 */
@@ -51,16 +53,19 @@ export function parseDiaryBackupImageLine(line: string): DiaryBackupImageChunk |
   if (typeof parsed !== 'object' || parsed === null) {
     return null;
   }
-  const { image, data, last } = parsed as Record<string, unknown>;
+  const { image, index, data, last } = parsed as Record<string, unknown>;
   if (
     typeof image !== 'string' ||
+    typeof index !== 'number' ||
+    !Number.isSafeInteger(index) ||
+    index < 0 ||
     !isDiaryImage({ fileName: image }) ||
     typeof data !== 'string' ||
     !isValidBase64(data)
   ) {
     return null;
   }
-  return { fileName: image, data, isLast: last === true };
+  return { fileName: image, index, data, isLast: last === true };
 }
 
 /**

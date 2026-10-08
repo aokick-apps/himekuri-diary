@@ -337,7 +337,9 @@ describe('日記データをインポートボタン(データ管理セクショ
       fireEvent.press(screen.getByText(IMPORT_BUTTON_LABEL));
     });
     await waitFor(() => expect(Alert.alert).toHaveBeenCalledTimes(1));
-    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('件の不正なエントリをスキップしました'),
+    );
     await pressAlertButtonByLabel('取り込む');
 
     await waitFor(() => expect(AsyncStorage.setItem).toHaveBeenCalled());

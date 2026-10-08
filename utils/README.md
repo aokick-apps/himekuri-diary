@@ -87,7 +87,7 @@ utils/
 
 - `buildDiaryExportFileName(date?)`: エクスポート先のファイル名(`diary-export-YYYYMMDD-HHmmss.json`)を生成します。複数回エクスポートしても上書きされないよう、日時(秒単位)を含めています。
 - `serializeDiaryEntriesForExport(entries)`: 日記データ一覧をインデント付きの配列JSONに変換します。復号済みの平文をそのまま書き出すため、書き出し先ファイルは暗号化されません。
-- `buildDiaryBackupHeaderLine(entries, imageFileNames)` / `buildDiaryBackupImageLine(fileName, data, isLastChunk)`: 画像入りバックアップ(JSON Lines)の行を組み立てます。1行目が日記と画像ファイル名の一覧、2行目以降が画像の断片(`{"image","data"(Base64),"last"?}`)です。断片は元データ48KiB(3の倍数)ごとで、どの行も単独でデコードできます。拡張子は従来どおり`.json`のままです(ファイル選択で選べなくならないようにするため)。
+- `buildDiaryBackupHeaderLine(entries, imageFileNames)` / `buildDiaryBackupImageLine(fileName, data, index, isLastChunk)`: 画像入りバックアップ(JSON Lines)の行を組み立てます。1行目が日記と画像ファイル名の一覧、2行目以降が画像の断片(`{"image","index"(0始まりの連番),"data"(Base64),"last"?}`)です。断片は元データ48KiB(3の倍数)ごとで、どの行も単独でデコードできます。拡張子は従来どおり`.json`のままです(ファイル選択で選べなくならないようにするため)。
 
 ## `diary-file-transfer.ts` の構成
 
@@ -103,7 +103,7 @@ utils/
 添付画像を含むバックアップの読み書きです。写真の合計サイズに比例してメモリを使わないよう、全体を1つの文字列やMapに載せず、`FileHandle`で断片ごとに読み書きします(ピークは日記本文+1断片分)。
 
 - `writeDiaryBackupFile(file, entries)`: 本体が存在する添付画像があれば、1行目に日記、続けて画像を48KiBずつBase64化した行を追記します。無ければ配列JSONを書き出します。
-- `readDiaryBackupForImport(asset)`: 1行目だけを読んで日記と画像ファイル名を取り出します(1行で完結しない旧形式の配列JSONは全文を読み込みます。Webは先頭行だけを読み、画像は復元しません)。返す`restoreImages()`は取り込み確定後に呼び、必要な画像だけを一時ファイルへ書き、最後の断片まで成功したものを本来の場所へ移します。同名の画像が既にあれば上書きせず、途中で失敗した画像は一時ファイルを消して失敗枚数に数えます。
+- `readDiaryBackupForImport(asset)`: 1行目だけを読んで日記と画像ファイル名を取り出します(1行で完結しない旧形式の配列JSONは全文を読み込みます。Webは先頭行だけを読み、画像は復元しません)。返す`restoreImages()`は取り込み確定後に呼び、必要な画像だけを一時ファイルへ書き、最後の断片まで成功したものを本来の場所へ移します。同名の画像が既にあれば上書きせず、連番が揃わない・途中で失敗した画像は一時ファイルを消して失敗枚数に数えます。一時ファイルは添付画像ディレクトリの外(キャッシュ配下の専用ディレクトリ)に作り、復元の開始時に前回の残りを空にします。
 - `base64.ts`: 外部依存なしでバイト列とBase64を相互変換します。
 
 ## `diary-import.ts` の構成

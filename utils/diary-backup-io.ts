@@ -2,7 +2,7 @@
 // 写真は合計で数百MBになりうるため、全体を文字列やMapに載せず、断片ごとにファイルとの間を
 // 行き来させて、メモリ使用量を日記本文+1断片分に抑える。
 import type { DocumentPickerAsset } from 'expo-document-picker';
-import { File, type FileHandle } from 'expo-file-system';
+import { Directory, File, Paths, type FileHandle } from 'expo-file-system';
 import { Platform } from 'react-native';
 
 import { decodeBase64, encodeBase64 } from '@/utils/base64';
@@ -10,6 +10,7 @@ import {
   buildDiaryBackupHeaderLine,
   buildDiaryBackupImageLine,
   collectReferencedImageFileNames,
+  DIARY_BACKUP_FORMAT,
   DIARY_BACKUP_IMAGE_CHUNK_BYTES,
   serializeDiaryEntriesForExport,
 } from '@/utils/diary-export';
@@ -29,6 +30,7 @@ import type { DiaryEntry } from '@/utils/diary-storage';
 const READ_BLOCK_BYTES = 64 * 1024;
 const WEB_FIRST_LINE_WINDOW_BYTES = 256 * 1024;
 const NEWLINE = 0x0a;
+const BACKUP_HEADER_PREFIX = `{"format":"${DIARY_BACKUP_FORMAT}"`;
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -87,6 +89,7 @@ function writeImageLines(output: FileHandle, fileName: string): void {
   const source = getDiaryImageFile({ fileName }).open();
   try {
     let remaining = source.size ?? 0;
+    let index = 0;
     // 0バイトの画像も、空の断片1行として必ず書き出す
     do {
       const length = Math.min(DIARY_BACKUP_IMAGE_CHUNK_BYTES, remaining);
@@ -95,8 +98,9 @@ function writeImageLines(output: FileHandle, fileName: string): void {
         throw new Error('添付画像を最後まで読み込めませんでした');
       }
       remaining -= length;
-      const line = buildDiaryBackupImageLine(fileName, encodeBase64(bytes), remaining === 0);
+      const line = buildDiaryBackupImageLine(fileName, encodeBase64(bytes), index, remaining === 0);
       output.writeBytes(encoder.encode(`${line}\n`));
+      index += 1;
     } while (remaining > 0);
   } finally {
     source.close();
@@ -146,7 +150,8 @@ function parseFirstLine(line: string | null): DiaryImportParseResult | null {
   try {
     return parseDiaryEntriesForImport(line);
   } catch (error) {
-    if (error instanceof SyntaxError) {
+    // 画像入りバックアップの1行目が壊れている場合に、写真入りの大きなファイルを全文読み込みしない
+    if (error instanceof SyntaxError && !line.startsWith(BACKUP_HEADER_PREFIX)) {
       return null;
     }
     throw error;
@@ -162,7 +167,8 @@ function readFirstLineOfNativeFile(file: File): string | null {
     } finally {
       handle.close();
     }
-  } catch {
+  } catch (error) {
+    console.warn('readFirstLineOfNativeFile: 先頭行を読み込めませんでした', error);
     return null;
   }
 }
@@ -183,9 +189,35 @@ async function readFirstLineOfBrowserFile(file: Blob): Promise<string> {
   }
 }
 
+const RESTORE_TEMP_DIRECTORY_NAME = 'diary-backup-restore';
+let tempFileCounter = 0;
+
+// 一時ファイルは添付画像ディレクトリの外に、画像名と衝突しない名前で作る
+function getRestoreTempDirectory(): Directory {
+  return new Directory(Paths.cache, RESTORE_TEMP_DIRECTORY_NAME);
+}
+
+// 前回のクラッシュ等で残った一時ファイルを、復元の開始時にまとめて消す
+function resetRestoreTempDirectory(): Directory {
+  const directory = getRestoreTempDirectory();
+  if (directory.exists) {
+    directory.delete();
+  }
+  directory.create({ intermediates: true, idempotent: true });
+  return directory;
+}
+
+type InProgressImage = {
+  fileName: string;
+  temp: File;
+  handle: FileHandle;
+  isClosed: boolean;
+  nextIndex: number;
+};
+
 /**
  * 画像入りバックアップの2行目以降から、必要な画像だけを復元する。1枚ずつ一時ファイルに書き、
- * 最後の断片まで成功したものだけを本来の場所へ移す。途中で失敗した画像は一時ファイルを消して失敗に数える。
+ * 断片が連番どおりに最後まで揃ったものだけを本来の場所へ移す。途中で失敗した画像は一時ファイルを消して失敗に数える。
  */
 async function restoreImagesFromBackupFile(
   file: File,
@@ -202,12 +234,14 @@ async function restoreImagesFromBackupFile(
     return 0;
   }
 
-  const directory = getDiaryImagesDirectory();
+  let tempDirectory: Directory;
   let input: FileHandle;
   try {
+    const directory = getDiaryImagesDirectory();
     if (!directory.exists) {
       directory.create({ intermediates: true, idempotent: true });
     }
+    tempDirectory = resetRestoreTempDirectory();
     input = file.open();
   } catch (error) {
     console.warn('restoreImagesFromBackupFile: 添付画像を復元できませんでした', error);
@@ -216,22 +250,31 @@ async function restoreImagesFromBackupFile(
 
   const completed = new Set<string>();
   const failed = new Set<string>();
-  let current: { fileName: string; temp: File; handle: FileHandle } | null = null;
+  const state: { current: InProgressImage | null } = { current: null };
 
+  // close済みのハンドルを二度閉じず、closeの失敗が一時ファイルの削除を妨げないよう別々に後始末する
   const discardCurrent = () => {
+    const current = state.current;
     if (!current) {
       return;
     }
+    state.current = null;
     failed.add(current.fileName);
+    if (!current.isClosed) {
+      current.isClosed = true;
+      try {
+        current.handle.close();
+      } catch (error) {
+        console.warn('restoreImagesFromBackupFile: 一時ファイルを閉じられませんでした', error);
+      }
+    }
     try {
-      current.handle.close();
       if (current.temp.exists) {
         current.temp.delete();
       }
     } catch (error) {
       console.warn('restoreImagesFromBackupFile: 一時ファイルを削除できませんでした', error);
     }
-    current = null;
   };
 
   try {
@@ -250,26 +293,34 @@ async function restoreImagesFromBackupFile(
         discardCurrent();
         continue;
       }
-      const { fileName, data, isLast } = chunk;
+      const { fileName, index, data, isLast } = chunk;
       if (!targets.has(fileName) || completed.has(fileName) || failed.has(fileName)) {
         continue;
       }
-      if (current && current.fileName !== fileName) {
+      if (state.current && state.current.fileName !== fileName) {
         // 最後の断片に到達しないまま別の画像に移った
         discardCurrent();
       }
       try {
-        if (!current) {
-          const temp: File = new File(directory, `${fileName}.partial`);
+        if (!state.current) {
+          tempFileCounter += 1;
+          const temp = new File(tempDirectory, `${Date.now()}-${tempFileCounter}.partial`);
           temp.create({ overwrite: true });
-          current = { fileName, temp, handle: temp.open() };
+          state.current = { fileName, temp, handle: temp.open(), isClosed: false, nextIndex: 0 };
+        }
+        const current = state.current;
+        // 先頭や途中の断片が欠けた画像を、成功として扱わない
+        if (index !== current.nextIndex) {
+          throw new Error('添付画像の断片が連続していません');
         }
         current.handle.writeBytes(decodeBase64(data));
+        current.nextIndex += 1;
         if (isLast) {
+          current.isClosed = true;
           current.handle.close();
           current.temp.move(getDiaryImageFile({ fileName }));
+          state.current = null;
           completed.add(fileName);
-          current = null;
           await yieldToUi();
         }
       } catch (error) {
@@ -278,9 +329,9 @@ async function restoreImagesFromBackupFile(
         failed.add(fileName);
       }
     }
-    // 最後の断片が無いまま終わった画像(ファイルが途中で切れている)
-    discardCurrent();
   } finally {
+    // 反復中の例外でも、進行中のハンドルを閉じて一時ファイルを残さない
+    discardCurrent();
     input.close();
   }
   return targets.size - completed.size;

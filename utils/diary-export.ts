@@ -59,13 +59,17 @@ export function buildDiaryBackupHeaderLine(
   });
 }
 
-/** 画像の断片1つ分の行。その画像の最後の断片には`last`を付け、途中で切れたファイルを検出できるようにする */
+/**
+ * 画像の断片1つ分の行。`index`は画像内での0始まりの連番で、欠けた断片を検出するために使う。
+ * その画像の最後の断片には`last`を付け、途中で切れたファイルも検出できるようにする。
+ */
 export function buildDiaryBackupImageLine(
   fileName: string,
   data: string,
+  index: number,
   isLastChunk: boolean,
 ): string {
   return JSON.stringify(
-    isLastChunk ? { image: fileName, data, last: true } : { image: fileName, data },
+    isLastChunk ? { image: fileName, index, data, last: true } : { image: fileName, index, data },
   );
 }

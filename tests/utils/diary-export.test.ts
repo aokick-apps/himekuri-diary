@@ -134,16 +134,18 @@ describe('画像入りバックアップ(JSON Lines)の行の組み立て', () =
   });
 
   it('marks only the final chunk of an image with last (断片行)', () => {
-    expect(JSON.parse(buildDiaryBackupImageLine('a.jpg', 'QUJD', false))).toEqual({
+    expect(JSON.parse(buildDiaryBackupImageLine('a.jpg', 'QUJD', 0, false))).toEqual({
       image: 'a.jpg',
+      index: 0,
       data: 'QUJD',
     });
-    expect(JSON.parse(buildDiaryBackupImageLine('a.jpg', '', true))).toEqual({
+    expect(JSON.parse(buildDiaryBackupImageLine('a.jpg', '', 3, true))).toEqual({
       image: 'a.jpg',
+      index: 3,
       data: '',
       last: true,
     });
-    expect(buildDiaryBackupImageLine('a.jpg', 'QUJD', false)).not.toContain('\n');
+    expect(buildDiaryBackupImageLine('a.jpg', 'QUJD', 0, false)).not.toContain('\n');
   });
 
   it('uses a chunk size that is a multiple of 3 bytes so each chunk is valid Base64 on its own', () => {

@@ -205,13 +205,15 @@ describe('parseDiaryEntriesForImport (画像入りバックアップの1行目)'
 
 describe('parseDiaryBackupImageLine', () => {
   it('reads a valid chunk line (正常系)', () => {
-    expect(parseDiaryBackupImageLine('{"image":"a.jpg","data":"QUJD"}')).toEqual({
+    expect(parseDiaryBackupImageLine('{"image":"a.jpg","index":2,"data":"QUJD"}')).toEqual({
       fileName: 'a.jpg',
+      index: 2,
       data: 'QUJD',
       isLast: false,
     });
-    expect(parseDiaryBackupImageLine('{"image":"a.jpg","data":"","last":true}')).toEqual({
+    expect(parseDiaryBackupImageLine('{"image":"a.jpg","index":0,"data":"","last":true}')).toEqual({
       fileName: 'a.jpg',
+      index: 0,
       data: '',
       isLast: true,
     });
@@ -222,17 +224,21 @@ describe('parseDiaryBackupImageLine', () => {
       'not json',
       'null',
       '[]',
-      '{"image":"a.jpg"}',
-      '{"image":1,"data":"QUJD"}',
-      '{"image":"a.jpg","data":123}',
-      '{"image":"a.jpg","data":"QUJ"}',
-      '{"image":"a.jpg","data":"QU!D"}',
-      '{"image":"a.jpg","data":"QUJD=="}',
-      '{"image":"../a.jpg","data":"QUJD"}',
-      '{"image":"d/a.jpg","data":"QUJD"}',
-      '{"image":"d\\\\a.jpg","data":"QUJD"}',
-      '{"image":"..","data":"QUJD"}',
-      '{"image":"","data":"QUJD"}',
+      '{"image":"a.jpg","index":0}',
+      '{"image":"a.jpg","data":"QUJD"}',
+      '{"image":"a.jpg","index":-1,"data":"QUJD"}',
+      '{"image":"a.jpg","index":1.5,"data":"QUJD"}',
+      '{"image":"a.jpg","index":"0","data":"QUJD"}',
+      '{"image":1,"index":0,"data":"QUJD"}',
+      '{"image":"a.jpg","index":0,"data":123}',
+      '{"image":"a.jpg","index":0,"data":"QUJ"}',
+      '{"image":"a.jpg","index":0,"data":"QU!D"}',
+      '{"image":"a.jpg","index":0,"data":"QUJD=="}',
+      '{"image":"../a.jpg","index":0,"data":"QUJD"}',
+      '{"image":"d/a.jpg","index":0,"data":"QUJD"}',
+      '{"image":"d\\\\a.jpg","index":0,"data":"QUJD"}',
+      '{"image":"..","index":0,"data":"QUJD"}',
+      '{"image":"","index":0,"data":"QUJD"}',
     ];
     for (const line of lines) {
       expect(parseDiaryBackupImageLine(line)).toBeNull();

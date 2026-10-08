@@ -5,9 +5,15 @@ import type { DiaryEntry } from '@/utils/diary-storage';
 
 const EXPORT_FILE_NAME_PREFIX = 'diary-export';
 
-/** 画像本体を含むバックアップを、日記の配列だけの旧形式と見分けるための識別子 */
+/** 画像本体を含むバックアップ(JSON Lines)を、日記の配列だけの旧形式と見分けるための識別子 */
 export const DIARY_BACKUP_FORMAT = 'diary-backup';
 export const DIARY_BACKUP_VERSION = 2;
+
+/**
+ * 画像を1行に収める元データの大きさ。3の倍数にしておくと、断片ごとにBase64化しても
+ * パディングが入らず、どの断片も単独でデコードできる。
+ */
+export const DIARY_BACKUP_IMAGE_CHUNK_BYTES = 48 * 1024;
 
 /**
  * 日記データのエクスポート先ファイル名を生成する。
@@ -24,28 +30,42 @@ export function buildDiaryExportFileName(date: Date = new Date()): string {
 }
 
 /**
- * 日記データ一覧を、エクスポート用のJSON文字列に変換する。
+ * 日記データ一覧を、エクスポート用のJSON文字列(配列)に変換する。
  * 復号済みの平文をそのまま書き出すため、書き出し先ファイルは暗号化されない
  * (ユーザー自身が内容を確認・バックアップできることを目的とするため)。
- *
- * 添付画像(ファイル名 -> Base64)がある場合のみ、画像本体を埋め込んだオブジェクト形式で書き出す。
- * 画像が無い場合は従来どおり日記の配列だけを書き出し、旧形式のまま扱えるようにする。
  */
-export function serializeDiaryEntriesForExport(
+export function serializeDiaryEntriesForExport(entries: DiaryEntry[]): string {
+  return JSON.stringify(entries, null, 2);
+}
+
+/** 日記が参照している添付画像のファイル名(重複なし) */
+export function collectReferencedImageFileNames(entries: readonly DiaryEntry[]): string[] {
+  return [...new Set(entries.flatMap((entry) => (entry.images ?? []).map((i) => i.fileName)))];
+}
+
+/**
+ * 画像入りバックアップ(JSON Lines)の1行目。日記本体と、後続の行に本体が含まれる画像のファイル名一覧を
+ * 改行を含まない1行で表す。画像の枚数を本文の読み込みだけで分かるようにするため一覧を持たせる。
+ */
+export function buildDiaryBackupHeaderLine(
   entries: DiaryEntry[],
-  images: ReadonlyMap<string, string> = new Map(),
+  imageFileNames: readonly string[],
 ): string {
-  if (images.size === 0) {
-    return JSON.stringify(entries, null, 2);
-  }
+  return JSON.stringify({
+    format: DIARY_BACKUP_FORMAT,
+    version: DIARY_BACKUP_VERSION,
+    entries,
+    images: imageFileNames,
+  });
+}
+
+/** 画像の断片1つ分の行。その画像の最後の断片には`last`を付け、途中で切れたファイルを検出できるようにする */
+export function buildDiaryBackupImageLine(
+  fileName: string,
+  data: string,
+  isLastChunk: boolean,
+): string {
   return JSON.stringify(
-    {
-      format: DIARY_BACKUP_FORMAT,
-      version: DIARY_BACKUP_VERSION,
-      entries,
-      images: Object.fromEntries(images),
-    },
-    null,
-    2,
+    isLastChunk ? { image: fileName, data, last: true } : { image: fileName, data },
   );
 }

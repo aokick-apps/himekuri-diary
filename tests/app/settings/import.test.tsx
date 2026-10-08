@@ -677,16 +677,12 @@ describe('日記データをインポートボタン(データ管理セクショ
 
     it('reads the file content from the browser File object instead of expo-file-system (正常系: Web版)', async () => {
       jest.spyOn(Alert, 'alert').mockImplementation(() => {});
-      const webFileText = jest
-        .fn()
-        .mockResolvedValue(
-          JSON.stringify([
-            { id: '1', text: '取り込む日記', createdAt: '2026-02-01T00:00:00.000Z' },
-          ]),
-        );
+      const webFile = new Blob([
+        JSON.stringify([{ id: '1', text: '取り込む日記', createdAt: '2026-02-01T00:00:00.000Z' }]),
+      ]);
       (DocumentPicker.getDocumentAsync as jest.Mock).mockResolvedValue({
         canceled: false,
-        assets: [{ ...pickedAsset, file: { text: webFileText } }],
+        assets: [{ ...pickedAsset, file: webFile }],
       });
       render(<SettingsScreen />);
 
@@ -694,9 +690,9 @@ describe('日記データをインポートボタン(データ管理セクショ
         fireEvent.press(screen.getByText(IMPORT_BUTTON_LABEL));
       });
 
-      await waitFor(() => expect(webFileText).toHaveBeenCalledTimes(1));
-      expect(mockedFileSystem.__mockText).not.toHaveBeenCalled();
       await waitFor(() => expect(Alert.alert).toHaveBeenCalledTimes(1));
+      expect((Alert.alert as jest.Mock).mock.calls[0][1]).toContain('1件');
+      expect(mockedFileSystem.__mockText).not.toHaveBeenCalled();
     });
 
     it('shows a failure alert when the browser File object is missing from the picked asset (境界値: asset.fileが無い場合)', async () => {

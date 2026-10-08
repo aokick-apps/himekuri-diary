@@ -4,6 +4,10 @@ import {
   serializeDiaryEntriesForExport,
   DIARY_BACKUP_FORMAT,
   DIARY_BACKUP_VERSION,
+  buildDiaryBackupHeaderLine,
+  buildDiaryBackupImageLine,
+  collectReferencedImageFileNames,
+  DIARY_BACKUP_IMAGE_CHUNK_BYTES,
 } from '@/utils/diary-export';
 
 describe('buildDiaryExportFileName', () => {
@@ -95,31 +99,54 @@ describe('serializeDiaryEntriesForExport', () => {
   });
 });
 
-describe('serializeDiaryEntriesForExport (添付画像を含むバックアップ)', () => {
+describe('画像入りバックアップ(JSON Lines)の行の組み立て', () => {
   const entries: DiaryEntry[] = [
     {
       id: '1',
-      text: '写真つき',
+      text: '写真つき\n改行と🎉絵文字',
       createdAt: '2026-04-01T00:00:00.000Z',
+      images: [{ fileName: 'a.jpg' }, { fileName: 'b.jpg' }],
+    },
+    {
+      id: '2',
+      text: '同じ写真を参照',
+      createdAt: '2026-04-02T00:00:00.000Z',
       images: [{ fileName: 'a.jpg' }],
     },
+    { id: '3', text: '写真なし', createdAt: '2026-04-03T00:00:00.000Z' },
   ];
 
-  it('embeds image data in an object-format backup when images are provided (正常系)', () => {
-    const result = JSON.parse(
-      serializeDiaryEntriesForExport(entries, new Map([['a.jpg', 'QUJD']])),
-    );
+  it('collects each referenced file name once (正常系/境界値: 重複・画像なし)', () => {
+    expect(collectReferencedImageFileNames(entries)).toEqual(['a.jpg', 'b.jpg']);
+    expect(collectReferencedImageFileNames([])).toEqual([]);
+  });
 
-    expect(result).toEqual({
+  it('builds a single-line header holding the entries and the image file names (1行目)', () => {
+    const line = buildDiaryBackupHeaderLine(entries, ['a.jpg', 'b.jpg']);
+
+    expect(line).not.toContain('\n');
+    expect(JSON.parse(line)).toEqual({
       format: DIARY_BACKUP_FORMAT,
       version: DIARY_BACKUP_VERSION,
       entries,
-      images: { 'a.jpg': 'QUJD' },
+      images: ['a.jpg', 'b.jpg'],
     });
   });
 
-  it('keeps the legacy array format when there are no images to embed (後方互換: 画像なし)', () => {
-    expect(JSON.parse(serializeDiaryEntriesForExport(entries, new Map()))).toEqual(entries);
-    expect(JSON.parse(serializeDiaryEntriesForExport(entries))).toEqual(entries);
+  it('marks only the final chunk of an image with last (断片行)', () => {
+    expect(JSON.parse(buildDiaryBackupImageLine('a.jpg', 'QUJD', false))).toEqual({
+      image: 'a.jpg',
+      data: 'QUJD',
+    });
+    expect(JSON.parse(buildDiaryBackupImageLine('a.jpg', '', true))).toEqual({
+      image: 'a.jpg',
+      data: '',
+      last: true,
+    });
+    expect(buildDiaryBackupImageLine('a.jpg', 'QUJD', false)).not.toContain('\n');
+  });
+
+  it('uses a chunk size that is a multiple of 3 bytes so each chunk is valid Base64 on its own', () => {
+    expect(DIARY_BACKUP_IMAGE_CHUNK_BYTES % 3).toBe(0);
   });
 });

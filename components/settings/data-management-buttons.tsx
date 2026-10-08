@@ -7,13 +7,13 @@ import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, View } from 
 import { ThemedText } from '@/components/themed-text';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { buildDiaryExportFileName, serializeDiaryEntriesForExport } from '@/utils/diary-export';
-import { downloadOnWeb, readPickedFileContent } from '@/utils/diary-file-transfer';
 import {
-  isDiaryImageAttachmentSupported,
-  readDiaryImagesAsBase64,
-  restoreDiaryImagesFromBase64,
-} from '@/utils/diary-images';
-import { parseDiaryEntriesForImport } from '@/utils/diary-import';
+  readDiaryBackupForImport,
+  writeDiaryBackupFile,
+  type DiaryBackupImport,
+} from '@/utils/diary-backup-io';
+import { downloadOnWeb } from '@/utils/diary-file-transfer';
+import { isDiaryImageAttachmentSupported } from '@/utils/diary-images';
 import {
   buildDiaryPartialCorruptionMessage,
   clearAllDiaryEntries,
@@ -135,13 +135,9 @@ export function ExportDiaryDataButton() {
           : null;
 
       const fileName = buildDiaryExportFileName();
-      const content = serializeDiaryEntriesForExport(
-        entries,
-        await readDiaryImagesAsBase64(entries),
-      );
 
       if (Platform.OS === 'web') {
-        downloadOnWeb(fileName, content);
+        downloadOnWeb(fileName, serializeDiaryEntriesForExport(entries));
         if (partialCorruptionNotice) {
           Alert.alert('エクスポートが完了しました', partialCorruptionNotice);
         }
@@ -151,7 +147,7 @@ export function ExportDiaryDataButton() {
       // ネイティブ(iOS/Android)は一旦キャッシュディレクトリにJSONファイルを書き出してから
       // OS標準の共有シートで共有する。ディレクトリ取得失敗時の例外は外側のtry-catchで捕捉される
       const file = new File(Paths.cache, fileName);
-      file.write(content);
+      await writeDiaryBackupFile(file, entries);
       const fileUri = file.uri;
 
       const isSharingAvailable = await Sharing.isAvailableAsync();
@@ -209,7 +205,7 @@ export function ImportDiaryDataButton() {
     null,
   );
 
-  const importEntries = useCallback(async (entries: DiaryEntry[], images: Map<string, string>) => {
+  const importEntries = useCallback(async (entries: DiaryEntry[], backup: DiaryBackupImport) => {
     // 逐次保存のため、途中で失敗しても直前までのエントリは保存済みのまま残る。
     // 「全く反映されなかった」という誤認を防ぐため、失敗時は成功済み件数を伝える。
     let succeededCount = 0;
@@ -217,9 +213,9 @@ export function ImportDiaryDataButton() {
       // 日記が参照する画像を先に戻し、日記だけが取り込まれて画像が欠ける状態を避ける
       let failedImageCount = 0;
       try {
-        failedImageCount = restoreDiaryImagesFromBase64(images);
+        failedImageCount = await backup.restoreImages();
       } catch {
-        failedImageCount = images.size;
+        failedImageCount = backup.imageFileNames.length;
       }
       // 暗号鍵未生成の状態で並列保存すると、各呼び出しが別々の鍵を生成し合って
       // 書き込みを取り合い、データが消失し得るため、あえて逐次保存にしている
@@ -247,7 +243,7 @@ export function ImportDiaryDataButton() {
   }, []);
 
   const confirmImport = useCallback(
-    (entries: DiaryEntry[], invalidCount: number, images: Map<string, string>) => {
+    (entries: DiaryEntry[], invalidCount: number, backup: DiaryBackupImport) => {
       // 誤操作による意図しない上書きを防ぐため、取り込み前に件数を示して確認する
       // (無効なエントリが除外されていた場合は、その件数もあわせて伝える)
       const skippedNotice =
@@ -255,17 +251,17 @@ export function ImportDiaryDataButton() {
           ? `\n${invalidCount}件のデータは形式が正しくないか文字数上限を超えていたためスキップされました。`
           : '';
       const imageNotice =
-        images.size === 0
+        backup.imageFileNames.length === 0
           ? ''
           : isDiaryImageAttachmentSupported()
-            ? `\n添付写真${images.size}枚もあわせて取り込みます。`
+            ? `\n添付写真${backup.imageFileNames.length}枚もあわせて取り込みます。`
             : '\nこの環境では添付写真は取り込まれません。';
       Alert.alert(
         '日記データをインポートしますか?',
         `${entries.length}件の日記データを取り込みます。同じ日記が既にある場合は、ファイルの内容で上書きされます。${imageNotice}${skippedNotice}`,
         [
           { text: 'キャンセル', style: 'cancel', onPress: () => setIsImporting(false) },
-          { text: '取り込む', onPress: () => importEntries(entries, images) },
+          { text: '取り込む', onPress: () => importEntries(entries, backup) },
         ],
         // Androidは既定でcancelable: falseのため、戻る操作・外側タップで閉じられるようにした上で、
         // ボタンのonPressが呼ばれずに閉じた場合もonDismissで解除し、取り込みボタンの固着を防ぐ
@@ -284,8 +280,8 @@ export function ImportDiaryDataButton() {
         return;
       }
 
-      const content = await readPickedFileContent(result.assets[0]);
-      const { validEntries, invalidCount, images } = parseDiaryEntriesForImport(content);
+      const backup = await readDiaryBackupForImport(result.assets[0]);
+      const { validEntries, invalidCount } = backup;
 
       if (invalidCount > 0) {
         // サイレントにスキップするとデータ欠落に誰も気づけないため、開発者向けにログを残す
@@ -302,7 +298,7 @@ export function ImportDiaryDataButton() {
         return;
       }
 
-      confirmImport(validEntries, invalidCount, images);
+      confirmImport(validEntries, invalidCount, backup);
     } catch {
       Alert.alert(
         'インポートに失敗しました',

@@ -18,6 +18,7 @@ tests/
   helpers/
     settings-screen-mocks.ts   設定画面テスト共通のモック（ファイルシステム・通知・生体認証など）のファクトリ
     mock-diary-images.ts       diary-imagesのモック
+    mock-memory-file-system.ts expo-file-systemのインメモリ実装(バックアップの読み書きテスト用)
   components/
     onboarding.test.tsx    components/onboarding.tsx（初回起動時のオンボーディング画面）のテスト
     save-toast.test.tsx    components/save-toast.tsx（保存成功時に表示する一時的なトースト）のテスト

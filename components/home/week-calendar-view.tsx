@@ -32,12 +32,15 @@ export function WeekCalendarView({
   onEntryPress,
   onCreateEntry,
   isLoading,
+  showEmptyWeekHint,
 }: {
   entriesByDate: Record<string, DiaryEntry[]>;
   onEntryPress: (dateKey: string) => void;
   onCreateEntry: (dateKey: string) => void;
   // 日記の有無が未確定の間は新規作成ボタンを出さない
   isLoading: boolean;
+  // 日記が1件も無い場合は画面上部の案内と重複するため、週内のヒントは出さない
+  showEmptyWeekHint: boolean;
 }) {
   const textColor = useThemeColor({}, 'text');
   const tintColor = useThemeColor({}, 'tint');
@@ -125,7 +128,7 @@ export function WeekCalendarView({
         </Pressable>
       </View>
       <ScrollView contentContainerStyle={styles.weekScrollContent}>
-        {isWeekEmpty ? (
+        {isWeekEmpty && showEmptyWeekHint ? (
           <ThemedText style={styles.weekEmptyHint}>
             「+」をタップすると、その日の日記を新規作成できます
           </ThemedText>

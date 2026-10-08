@@ -15,6 +15,7 @@ constants/
 ## `diary-messages.ts` の構成
 
 - `SAVE_SUCCESS_MESSAGE`: 日記の保存に成功した際のトーストメッセージです。ホーム画面([`app/(tabs)/index.tsx`](<../app/(tabs)/index.tsx>))・日別一覧画面(`app/day-entries/[date].tsx`)・編集画面(`app/edit-entry/[id].tsx`)の複数の保存導線で文言がぶれないよう共通化しています。
+- `EMPTY_STATE_MESSAGE_MONTH` / `EMPTY_STATE_MESSAGE_WEEK`: 日記が1件も無いときにホーム画面上部へ表示する案内です。月表示では日付のタップ、週表示では「+」ボタンと、表示中のレイアウトで押す場所を示します。日記が0件の間は週表示内のヒントを出さず、案内をここに一本化しています。
 
 ## `onboarding-slides.ts` の構成
 

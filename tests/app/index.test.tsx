@@ -26,6 +26,7 @@ import { TAB_SCREEN_CONTAINER_SAFE_AREA_TEST_ID } from '@/components/tab-screen-
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { EMPTY_STATE_MESSAGE_MONTH, EMPTY_STATE_MESSAGE_WEEK } from '@/constants/diary-messages';
 import { Colors } from '@/constants/theme';
 import { decryptText, encryptText, getOrCreateEncryptionKey } from '@/utils/diary-encryption';
 import {
@@ -194,7 +195,7 @@ const INPUT_PLACEHOLDER = '今日の出来事や気持ちを書いてみまし�
 const SEARCH_INPUT_PLACEHOLDER = '日記を検索';
 const CLOSE_BUTTON_TEXT = '閉じる';
 // 日記が0件のときにカレンダーの上に表示される案内メッセージ
-const EMPTY_STATE_TEXT = 'まだ日記がありません。最初の日記を書いてみましょう。';
+const EMPTY_STATE_TEXT = EMPTY_STATE_MESSAGE_MONTH;
 // 全件読み込みに失敗したときにカレンダーの上に表示されるエラーメッセージ(0件と区別するためのもの)
 const LOAD_ERROR_TEXT = DIARY_LOAD_ERROR_MESSAGE;
 const KEYBOARD_AVOIDING_VIEW_TEST_ID = 'keyboard-avoiding-view';
@@ -6126,9 +6127,29 @@ describe('HomeScreen', () => {
         expect(getWeekCreateButton(PAST_DATE_KEY).props.hitSlop).toBe(8);
       });
 
-      it('shows a hint explaining the "+" button and emphasizes only the today column when the whole week has no entries (正常系)', async () => {
+      it('shows a single week-specific empty message at the top instead of the in-week hint when there are no diary entries at all (正常系: 空状態の案内の一本化)', async () => {
         await renderInWeekLayoutAfterLoad();
 
+        expect(screen.getByText(EMPTY_STATE_MESSAGE_WEEK)).toBeTruthy();
+        expect(screen.queryByText(EMPTY_STATE_MESSAGE_MONTH)).toBeNull();
+        expect(screen.queryByText(/「\+」をタップすると/)).toBeNull();
+        expect(
+          StyleSheet.flatten(getWeekCreateButton(TODAY_DATE_KEY).props.style).borderWidth,
+        ).toBe(2);
+      });
+
+      it('shows a hint explaining the "+" button and emphasizes only the today column when the displayed week has no entries but other weeks do (正常系)', async () => {
+        await AsyncStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify([
+            { id: '1', text: '先月の日記', createdAt: buildCreatedAtForDateKey('2026-05-10') },
+          ]),
+        );
+        jest.clearAllMocks();
+
+        await renderInWeekLayoutAfterLoad();
+
+        expect(screen.queryByText(EMPTY_STATE_MESSAGE_WEEK)).toBeNull();
         expect(screen.getByText(/「\+」をタップすると/)).toBeTruthy();
         expect(
           StyleSheet.flatten(getWeekCreateButton(TODAY_DATE_KEY).props.style).borderWidth,

@@ -24,7 +24,11 @@ import { SaveToast } from '@/components/save-toast';
 import { TabScreenContainer } from '@/components/tab-screen-container';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
-import { SAVE_SUCCESS_MESSAGE } from '@/constants/diary-messages';
+import {
+  EMPTY_STATE_MESSAGE_MONTH,
+  EMPTY_STATE_MESSAGE_WEEK,
+  SAVE_SUCCESS_MESSAGE,
+} from '@/constants/diary-messages';
 import { useCalendarLayoutPreference } from '@/contexts/calendar-layout-preference-context';
 import { useDraftAutoSave } from '@/hooks/use-draft-auto-save';
 import { useDraftRestore } from '@/hooks/use-draft-restore';
@@ -460,10 +464,13 @@ export default function HomeScreen() {
                   </Pressable>
                 </ThemedView>
               ) : entries.length === 0 ? (
-                // 日記が1件も無い場合、案内メッセージを表示する(カレンダー自体は書く導線として表示し続ける)
+                // 日記が1件も無い場合の案内はここに一本化し、表示中のレイアウトで実際に押す場所を示す
+                // (カレンダー自体は書く導線として表示し続ける)
                 <ThemedView style={styles.emptyState}>
                   <ThemedText style={styles.emptyStateText}>
-                    まだ日記がありません。最初の日記を書いてみましょう。
+                    {calendarLayout === 'week'
+                      ? EMPTY_STATE_MESSAGE_WEEK
+                      : EMPTY_STATE_MESSAGE_MONTH}
                   </ThemedText>
                 </ThemedView>
               ) : null}
@@ -476,6 +483,7 @@ export default function HomeScreen() {
                   onEntryPress={handleWeekEntryPress}
                   onCreateEntry={openNewEntryModal}
                   isLoading={isLoading}
+                  showEmptyWeekHint={entries.length > 0}
                 />
               ) : (
                 <MonthCalendar

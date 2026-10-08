@@ -16,6 +16,7 @@ import {
   deleteDiaryEntry,
   getAllDiaryEntries,
   getDiaryEntryById,
+  isDiaryEntry,
   saveDiaryEntry,
   type DiaryEntry,
 } from '@/utils/diary-storage';
@@ -48,6 +49,14 @@ jest.mock('expo-crypto', () => {
 // expo-secure-storeはjest-expoのオートモックだと`getItemAsync`が常に`undefined`を返し、
 // 状態を永続化しない。`tests/utils/diary-encryption.test.ts`と同様、インメモリで
 // キーと値を保持する独自モックに差し替える。
+// 添付画像のファイル削除はネイティブのファイルシステムに依存するため、呼び出されたかだけを検証する
+jest.mock('@/utils/diary-images', () => ({
+  deleteAllDiaryImages: jest.fn(),
+}));
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const mockedDiaryImages = require('@/utils/diary-images') as { deleteAllDiaryImages: jest.Mock };
+
 jest.mock('expo-secure-store', () => {
   let store: Record<string, string> = {};
   return {
@@ -100,6 +109,19 @@ describe('clearAllDiaryEntries', () => {
 
     expect(await AsyncStorage.getItem(buildDiaryEntryKey('1'))).toBeNull();
     expect(await AsyncStorage.getItem(buildDiaryEntryKey('2'))).toBeNull();
+  });
+
+  it('also deletes every attached image file (正常系: 添付画像も削除)', async () => {
+    await seedDiaryEntry({
+      id: '1',
+      text: '画像付き',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      images: [{ fileName: 'a.jpg' }],
+    });
+
+    await clearAllDiaryEntries();
+
+    expect(mockedDiaryImages.deleteAllDiaryImages).toHaveBeenCalledTimes(1);
   });
 
   it('also removes the legacy single-key data if it still remains (念のためのレガシーキー削除)', async () => {
@@ -800,5 +822,30 @@ describe('getAllDiaryEntries', () => {
 
       expect(result.map((entry) => entry.id)).toEqual(['c', 'b', 'a']);
     });
+  });
+});
+
+describe('isDiaryEntry', () => {
+  const base = { id: '1', text: '本文', createdAt: '2026-01-01T00:00:00.000Z' };
+
+  it('accepts entries without images for backward compatibility (正常系: 後方互換)', () => {
+    expect(isDiaryEntry(base)).toBe(true);
+  });
+
+  it('accepts entries whose images are valid references (正常系)', () => {
+    expect(isDiaryEntry({ ...base, images: [] })).toBe(true);
+    expect(isDiaryEntry({ ...base, images: [{ fileName: 'a.jpg' }] })).toBe(true);
+  });
+
+  it.each([
+    ['not an array', { fileName: 'a.jpg' }],
+    ['missing fileName', [{}]],
+    ['non-string fileName', [{ fileName: 1 }]],
+    ['empty fileName', [{ fileName: '' }]],
+    ['parent directory reference', [{ fileName: '..' }]],
+    ['path with a slash', [{ fileName: '../secret.jpg' }]],
+    ['path with a backslash', [{ fileName: 'a\\b.jpg' }]],
+  ])('rejects images that are %s (異常系: 不正な参照)', (_label, images) => {
+    expect(isDiaryEntry({ ...base, images })).toBe(false);
   });
 });

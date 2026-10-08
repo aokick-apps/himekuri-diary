@@ -4,7 +4,7 @@ import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import * as SecureStore from 'expo-secure-store';
 import React from 'react';
-import { Alert, Dimensions, StyleSheet, useColorScheme } from 'react-native';
+import { Alert, Dimensions, FlatList, StyleSheet, useColorScheme } from 'react-native';
 
 import DayEntriesScreen from '@/app/day-entries/[date]';
 import { SAVE_SUCCESS_MESSAGE } from '@/constants/diary-messages';
@@ -98,16 +98,23 @@ jest.mock('expo-secure-store', () => {
 // この画面が使うexpo-routerのAPI(useLocalSearchParams/useRouter/useNavigation/useFocusEffect)を
 // 単体レンダリングでも動くようモック化する。日付パラメータはテストごとに`__setMockDateParam`で
 // 差し替えられるようにする(実際のexpo-routerには存在しないテスト専用のヘルパー)。
+// 添付画像のファイル操作はネイティブのファイルシステムに依存するため、呼び出し内容だけを検証する
+jest.mock('@/utils/diary-images', () =>
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require('../../helpers/mock-diary-images'),
+);
+
 jest.mock('expo-router', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const ReactForMock = require('react');
 
   let dateParam = '2026-08-15';
+  let highlightParam: string | undefined;
   const mockPush = jest.fn();
   const mockSetOptions = jest.fn();
 
   function useLocalSearchParams() {
-    return { date: dateParam };
+    return { date: dateParam, highlightEntryId: highlightParam };
   }
 
   function useRouter() {
@@ -147,6 +154,9 @@ jest.mock('expo-router', () => {
     __setMockDateParam: (value: string) => {
       dateParam = value;
     },
+    __setMockHighlightParam: (value: string | undefined) => {
+      highlightParam = value;
+    },
   };
 });
 
@@ -157,12 +167,20 @@ const {
   __mockPush: mockPush,
   __mockSetOptions: mockSetOptions,
   __setMockDateParam: setMockDateParam,
+  __setMockHighlightParam: setMockHighlightParam,
   // eslint-disable-next-line @typescript-eslint/no-require-imports
 } = require('expo-router') as {
   __triggerRefocus: () => void;
   __mockPush: jest.Mock;
   __mockSetOptions: jest.Mock;
   __setMockDateParam: (value: string) => void;
+  __setMockHighlightParam: (value: string | undefined) => void;
+};
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const mockedDiaryImages = require('../../helpers/mock-diary-images') as {
+  deleteDiaryImages: jest.Mock;
+  IMAGE_BASE_URI: string;
 };
 
 const secureStoreMock = SecureStore as unknown as { __reset: () => void };
@@ -242,6 +260,7 @@ describe('DayEntriesScreen', () => {
     secureStoreMock.__reset();
     jest.clearAllMocks();
     setMockDateParam(DATE_KEY);
+    setMockHighlightParam(undefined);
   });
 
   // FlatList(VirtualizedList)は内部でセル再計算用のsetTimeoutを予約するため、
@@ -595,6 +614,151 @@ describe('DayEntriesScreen', () => {
       expect(screen.getByText('最初から表示されている日記')).toBeTruthy();
       expect(screen.getByText('再フォーカスで追加された日記')).toBeTruthy();
       expect(screen.queryByText(EMPTY_STATE_MESSAGE)).toBeNull();
+    });
+  });
+
+  describe('検索結果からの遷移(対象の日記の強調表示)', () => {
+    async function seedTwoEntries() {
+      await seedDiaryEntries([
+        { id: '1', text: '朝の日記', createdAt: localIso(DATE_KEY, 8, 0) },
+        { id: '2', text: '夜の日記', createdAt: localIso(DATE_KEY, 21, 0) },
+      ]);
+    }
+
+    it('highlights the entry passed as highlightEntryId and scrolls the list to it (正常系)', async () => {
+      await seedTwoEntries();
+      setMockHighlightParam('2');
+      const scrollToIndexSpy = jest
+        .spyOn(FlatList.prototype, 'scrollToIndex')
+        .mockImplementation(() => {});
+
+      render(<DayEntriesScreen />);
+      await screen.findByText('夜の日記');
+
+      await waitFor(() =>
+        expect(scrollToIndexSpy).toHaveBeenCalledWith(expect.objectContaining({ index: 1 })),
+      );
+      const highlighted = screen.getByTestId('day-entry-2');
+      expect(StyleSheet.flatten(highlighted.props.style).backgroundColor).toBe(
+        Colors.light.searchHighlightBackground,
+      );
+      expect(highlighted.props.accessibilityHint).toBe('検索で見つかった日記です');
+      expect(
+        StyleSheet.flatten(screen.getByTestId('day-entry-1').props.style).backgroundColor,
+      ).not.toBe(Colors.light.searchHighlightBackground);
+      scrollToIndexSpy.mockRestore();
+    });
+
+    it('removes the highlight after a few seconds (境界値: 一時的な強調)', async () => {
+      await seedTwoEntries();
+      setMockHighlightParam('2');
+      const scrollToIndexSpy = jest
+        .spyOn(FlatList.prototype, 'scrollToIndex')
+        .mockImplementation(() => {});
+      jest.useFakeTimers();
+      try {
+        render(<DayEntriesScreen />);
+        await screen.findByText('夜の日記');
+        await waitFor(() =>
+          expect(screen.getByTestId('day-entry-2').props.accessibilityHint).toBe(
+            '検索で見つかった日記です',
+          ),
+        );
+
+        await act(async () => {
+          jest.advanceTimersByTime(3999);
+        });
+        expect(screen.getByTestId('day-entry-2').props.accessibilityHint).toBe(
+          '検索で見つかった日記です',
+        );
+
+        await act(async () => {
+          jest.advanceTimersByTime(1);
+        });
+        expect(screen.getByTestId('day-entry-2').props.accessibilityHint).toBeUndefined();
+      } finally {
+        jest.useRealTimers();
+        scrollToIndexSpy.mockRestore();
+      }
+    });
+
+    it('neither highlights nor scrolls when the id is not among the entries of the date (異常系: 該当なし)', async () => {
+      await seedTwoEntries();
+      setMockHighlightParam('deleted-entry');
+      const scrollToIndexSpy = jest
+        .spyOn(FlatList.prototype, 'scrollToIndex')
+        .mockImplementation(() => {});
+
+      render(<DayEntriesScreen />);
+      await screen.findByText('夜の日記');
+
+      expect(scrollToIndexSpy).not.toHaveBeenCalled();
+      expect(screen.getByTestId('day-entry-1').props.accessibilityHint).toBeUndefined();
+      expect(screen.getByTestId('day-entry-2').props.accessibilityHint).toBeUndefined();
+      scrollToIndexSpy.mockRestore();
+    });
+  });
+
+  describe('添付画像', () => {
+    it('shows the attached photo under the entry text (正常系: 閲覧時のプレビュー)', async () => {
+      await seedDiaryEntries([
+        {
+          id: '1',
+          text: '写真付きの日記',
+          createdAt: localIso(DATE_KEY, 9, 0),
+          images: [{ fileName: 'photo.jpg' }],
+        },
+      ]);
+
+      render(<DayEntriesScreen />);
+      await screen.findByText('写真付きの日記');
+
+      expect(screen.getByLabelText('添付した写真')).toBeTruthy();
+    });
+
+    it('deletes the attached photo files only once the undo period of a deletion has expired (正常系: 孤児ファイルを残さない)', async () => {
+      const images = [{ fileName: 'photo.jpg' }];
+      await seedDiaryEntries([
+        { id: '1', text: '削除する写真付きの日記', createdAt: localIso(DATE_KEY, 9, 0), images },
+      ]);
+      jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+      const { unmount } = render(<DayEntriesScreen />);
+      await screen.findByText('削除する写真付きの日記');
+
+      fireEvent.press(screen.getByText('削除'));
+      const [, , buttons] = (Alert.alert as jest.Mock).mock.calls[0];
+      await act(async () => {
+        await buttons.find((b: { text: string }) => b.text === '削除').onPress();
+      });
+      expect(await screen.findByTestId('delete-undo-toast')).toBeTruthy();
+      // 元に戻せる間は画像を残しておく
+      expect(mockedDiaryImages.deleteDiaryImages).not.toHaveBeenCalledWith(images);
+
+      unmount();
+
+      expect(mockedDiaryImages.deleteDiaryImages).toHaveBeenCalledWith(images);
+    });
+
+    it('keeps the attached photo files when the deletion is undone (境界値: 取り消し)', async () => {
+      const images = [{ fileName: 'photo.jpg' }];
+      await seedDiaryEntries([
+        { id: '1', text: '元に戻す写真付きの日記', createdAt: localIso(DATE_KEY, 9, 0), images },
+      ]);
+      jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+      const { unmount } = render(<DayEntriesScreen />);
+      await screen.findByText('元に戻す写真付きの日記');
+
+      fireEvent.press(screen.getByText('削除'));
+      const [, , buttons] = (Alert.alert as jest.Mock).mock.calls[0];
+      await act(async () => {
+        await buttons.find((b: { text: string }) => b.text === '削除').onPress();
+      });
+      fireEvent.press(await screen.findByRole('button', { name: '元に戻す' }));
+      expect(await screen.findByText('元に戻す写真付きの日記')).toBeTruthy();
+
+      unmount();
+
+      expect(mockedDiaryImages.deleteDiaryImages).not.toHaveBeenCalledWith(images);
     });
   });
 

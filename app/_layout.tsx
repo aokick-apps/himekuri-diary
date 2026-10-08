@@ -12,6 +12,7 @@ import { AppLockProvider, useAppLock } from '@/contexts/app-lock-context';
 import { CalendarLayoutPreferenceProvider } from '@/contexts/calendar-layout-preference-context';
 import { DiaryReminderProvider } from '@/contexts/diary-reminder-context';
 import { ThemePreferenceProvider, useThemePreference } from '@/contexts/theme-preference-context';
+import { cleanUpUnreferencedDiaryImagesAsync } from '@/utils/diary-image-cleanup';
 import { hasCompletedOnboarding, markOnboardingCompleted } from '@/utils/onboarding-storage';
 
 export const unstable_settings = {
@@ -54,6 +55,11 @@ function RootLayoutContent() {
     return () => {
       isMounted = false;
     };
+  }, []);
+
+  // 前回の起動中に片付けきれなかった添付画像を、起動時に一度だけ掃除する
+  useEffect(() => {
+    void cleanUpUnreferencedDiaryImagesAsync();
   }, []);
 
   const handleFinishOnboarding = useCallback(() => {

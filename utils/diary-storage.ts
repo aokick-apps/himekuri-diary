@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { isDraftStorageKey } from '@/utils/diary-draft-storage';
+import { deleteAllDiaryImages } from '@/utils/diary-images';
 import {
   decryptText,
   encryptText,
@@ -26,11 +27,41 @@ export function buildDiaryEntryKey(id: string): string {
   return `${DIARY_ENTRY_KEY_PREFIX}${id}`;
 }
 
+/**
+ * 日記1件に添付できる画像の上限枚数。データ構造は配列で持ち、上限だけを変えれば複数枚に拡張できる。
+ */
+export const MAX_DIARY_IMAGES_PER_ENTRY = 1;
+
+/**
+ * 日記に添付した画像への参照。画像本体はアプリ専用ディレクトリに置き、日記データにはファイル名だけを持つ
+ * (端末ごとに変わる絶対パスを保存すると、OSの更新等でコンテナのパスが変わった際に参照が壊れるため)。
+ */
+export type DiaryImage = {
+  fileName: string;
+};
+
+export function isDiaryImage(value: unknown): value is DiaryImage {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const { fileName } = value as Record<string, unknown>;
+  // 添付画像ディレクトリの外を指す参照(インポートされた不正なデータ等)を受け付けない
+  return (
+    typeof fileName === 'string' &&
+    fileName !== '' &&
+    fileName !== '.' &&
+    fileName !== '..' &&
+    !/[\\/]/.test(fileName)
+  );
+}
+
 /** 日記1件分のデータ構造。一覧表示とエクスポート機能の両方で使うため、ここに集約する。 */
 export type DiaryEntry = {
   id: string;
   text: string;
   createdAt: string;
+  // 添付画像。古いデータ・バックアップとの互換のため、添付が無い場合はプロパティ自体を持たなくてよい
+  images?: DiaryImage[];
 };
 
 /**
@@ -46,7 +77,9 @@ export function isDiaryEntry(value: unknown): value is DiaryEntry {
   return (
     typeof candidate.id === 'string' &&
     typeof candidate.text === 'string' &&
-    typeof candidate.createdAt === 'string'
+    typeof candidate.createdAt === 'string' &&
+    (candidate.images === undefined ||
+      (Array.isArray(candidate.images) && candidate.images.every(isDiaryImage)))
   );
 }
 
@@ -106,6 +139,7 @@ export async function clearAllDiaryEntries(): Promise<void> {
   }
   // 移行が完了していれば通常は既に存在しないが、念のため引き続き削除しておく
   await AsyncStorage.removeItem(DIARY_ENTRIES_STORAGE_KEY);
+  deleteAllDiaryImages();
 }
 
 /**

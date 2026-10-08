@@ -58,6 +58,11 @@ jest.mock('@/utils/diary-reminder-notifications', () => ({
   cancelDailyReminderAsync: jest.fn(() => Promise.resolve()),
 }));
 
+// 全件削除時の添付画像の削除はネイティブのファイルシステムに依存するため、ここでは呼び出しを無効化する
+jest.mock('@/utils/diary-images', () => ({
+  deleteAllDiaryImages: jest.fn(),
+}));
+
 // 「アプリロック」セクションが使う`utils/app-lock-authentication.ts`
 // (expo-local-authenticationの薄いラッパー)を、実際のネイティブ生体認証APIを呼ばずに検証できるよう
 // モック化する(個別の挙動はtests/utils/app-lock-authentication.test.ts等で検証済み。ここでは結線確認のみ)。

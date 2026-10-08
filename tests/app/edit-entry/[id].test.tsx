@@ -73,6 +73,12 @@ jest.mock('expo-secure-store', () => {
 // 動くようモック化する。`navigation.addListener('beforeRemove', ...)`は実際の画面遷移(ヘッダーの
 // 戻る操作・Android物理戻るボタン・スワイプ戻るジェスチャー)のいずれでも発火する単一のイベントのため、
 // テスト側は登録されたコールバックを直接呼び出すことでこれらすべての操作を模擬できる。
+// 添付画像のファイル操作はネイティブのファイルシステムに依存するため、呼び出し内容だけを検証する
+jest.mock('@/utils/diary-images', () =>
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require('../../helpers/mock-diary-images'),
+);
+
 jest.mock('expo-router', () => {
   let idParam = 'entry-1';
   // router.back()が実際にnavigationのbeforeRemoveガードを経由する挙動を再現するため、
@@ -575,7 +581,7 @@ describe('EditEntryScreen', () => {
       }
     });
 
-    it('blocks a leave attempt made while waiting to navigate back and navigates only once after the delay (戻る操作)', async () => {
+    it('skips the remaining wait and navigates back only once when the user tries to leave while waiting after a successful save (戻る操作)', async () => {
       jest.useFakeTimers();
       try {
         jest.spyOn(Alert, 'alert').mockImplementation(() => {});
@@ -583,20 +589,63 @@ describe('EditEntryScreen', () => {
         await screen.findByTestId('save-toast');
 
         const preventDefault = jest.fn();
-        getBeforeRemoveListener()(buildBeforeRemoveEvent(preventDefault));
+        await act(async () => {
+          getBeforeRemoveListener()(buildBeforeRemoveEvent(preventDefault));
+        });
+        // 破棄確認は出さずにいったん止めたうえで、待ち時間を経過させなくても1回だけ戻る
         expect(preventDefault).toHaveBeenCalledTimes(1);
         expect(Alert.alert).not.toHaveBeenCalled();
-        expect(mockDispatch).not.toHaveBeenCalled();
+        await waitFor(() => expect(mockDispatch).toHaveBeenCalledTimes(1));
 
         await act(async () => {
           jest.advanceTimersByTime(NAVIGATE_BACK_DELAY_AFTER_SAVE_MS);
         });
-
         expect(mockDispatch).toHaveBeenCalledTimes(1);
         expect(Alert.alert).not.toHaveBeenCalled();
       } finally {
         jest.useRealTimers();
       }
+    });
+
+    it('navigates back immediately when the "戻る" action on the save toast is pressed, without waiting for the delay (正常系: 待機の短縮)', async () => {
+      jest.useFakeTimers();
+      try {
+        await renderAndPressSave('トーストから戻る日記', 'トーストから戻る編集後の日記');
+        await screen.findByTestId('save-toast');
+        expect(mockBack).not.toHaveBeenCalled();
+
+        await act(async () => {
+          fireEvent.press(screen.getByRole('button', { name: '戻る' }));
+        });
+
+        await waitFor(() => expect(mockBack).toHaveBeenCalledTimes(1));
+        await act(async () => {
+          jest.advanceTimersByTime(NAVIGATE_BACK_DELAY_AFTER_SAVE_MS);
+        });
+        expect(mockBack).toHaveBeenCalledTimes(1);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('does not offer the "戻る" toast action when the save fails (異常系: 保存失敗時は画面に留まる)', async () => {
+      await seedDiaryEntry({
+        id: ENTRY_ID,
+        text: '失敗する日記',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      });
+      render(<EditEntryScreen />);
+      const input = await screen.findByDisplayValue('失敗する日記');
+      fireEvent.changeText(input, '失敗する編集後の日記');
+      jest.spyOn(AsyncStorage, 'setItem').mockRejectedValueOnce(new Error('write failed'));
+
+      await act(async () => {
+        fireEvent.press(screen.getByRole('button', { name: '保存' }));
+      });
+
+      expect(await screen.findByText('更新に失敗しました。もう一度お試しください。')).toBeTruthy();
+      expect(screen.queryByRole('button', { name: '戻る' })).toBeNull();
+      expect(mockBack).not.toHaveBeenCalled();
     });
 
     it('does not navigate back and releases its timers when unmounted while waiting to navigate back (アンマウント)', async () => {
@@ -1673,6 +1722,111 @@ describe('EditEntryScreen', () => {
         process.off('unhandledRejection', onUnhandledRejection);
         consoleErrorSpy.mockRestore();
       }
+    });
+  });
+
+  describe('添付写真の編集', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mockedDiaryImages = require('../../helpers/mock-diary-images') as {
+      pickDiaryImageAsync: jest.Mock;
+      deleteDiaryImages: jest.Mock;
+    };
+    const ORIGINAL_IMAGES = [{ fileName: 'original.jpg' }];
+
+    async function renderWithPhoto() {
+      await seedDiaryEntry({
+        id: ENTRY_ID,
+        text: '写真付きの日記',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        images: ORIGINAL_IMAGES,
+      });
+      render(<EditEntryScreen />);
+      await screen.findByDisplayValue('写真付きの日記');
+      expect(screen.getByLabelText('添付した写真').props.source).toEqual({
+        uri: 'file:///documents/diary-images/original.jpg',
+      });
+    }
+
+    it('saves the replaced photo and deletes the file that is no longer referenced (正常系: 差し替え)', async () => {
+      await renderWithPhoto();
+      mockedDiaryImages.pickDiaryImageAsync.mockResolvedValue({
+        status: 'picked',
+        uri: 'file:///tmp/replaced.jpg',
+      });
+      await act(async () => {
+        fireEvent.press(screen.getByRole('button', { name: '添付した写真を差し替える' }));
+      });
+
+      await act(async () => {
+        fireEvent.press(screen.getByRole('button', { name: '保存' }));
+      });
+
+      await waitFor(async () =>
+        expect((await readPersistedEntry(ENTRY_ID))?.images).toEqual([
+          { fileName: 'saved-replaced.jpg' },
+        ]),
+      );
+      await waitFor(() =>
+        expect(mockedDiaryImages.deleteDiaryImages).toHaveBeenCalledWith(ORIGINAL_IMAGES),
+      );
+    });
+
+    it('saves the entry without images and deletes the removed photo file (正常系: 削除)', async () => {
+      await renderWithPhoto();
+      fireEvent.press(screen.getByRole('button', { name: '添付した写真を削除する' }));
+
+      await act(async () => {
+        fireEvent.press(screen.getByRole('button', { name: '保存' }));
+      });
+
+      await waitFor(async () => {
+        const persisted = await readPersistedEntry(ENTRY_ID);
+        expect(persisted?.text).toBe('写真付きの日記');
+        expect(persisted).not.toHaveProperty('images');
+      });
+      await waitFor(() =>
+        expect(mockedDiaryImages.deleteDiaryImages).toHaveBeenCalledWith(ORIGINAL_IMAGES),
+      );
+    });
+
+    it('keeps the original photo file when saving fails (異常系: 保存失敗)', async () => {
+      await renderWithPhoto();
+      fireEvent.press(screen.getByRole('button', { name: '添付した写真を削除する' }));
+      jest.spyOn(AsyncStorage, 'setItem').mockRejectedValueOnce(new Error('write failed'));
+
+      await act(async () => {
+        fireEvent.press(screen.getByRole('button', { name: '保存' }));
+      });
+
+      expect(await screen.findByText('更新に失敗しました。もう一度お試しください。')).toBeTruthy();
+      expect(mockedDiaryImages.deleteDiaryImages).not.toHaveBeenCalledWith(ORIGINAL_IMAGES);
+    });
+
+    it('asks for confirmation before leaving when only the photo was changed (境界値: 本文は未変更)', async () => {
+      jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+      await renderWithPhoto();
+      fireEvent.press(screen.getByRole('button', { name: '添付した写真を削除する' }));
+
+      const preventDefault = jest.fn();
+      getBeforeRemoveListener()(buildBeforeRemoveEvent(preventDefault));
+
+      expect(preventDefault).toHaveBeenCalledTimes(1);
+      expect(Alert.alert).toHaveBeenCalledWith(
+        '変更を破棄しますか?',
+        '編集中の内容は保存されません。',
+        expect.any(Array),
+      );
+    });
+
+    it('lets the user leave without confirmation when neither text nor photo changed (境界値: 変更なし)', async () => {
+      jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+      await renderWithPhoto();
+
+      const preventDefault = jest.fn();
+      getBeforeRemoveListener()(buildBeforeRemoveEvent(preventDefault));
+
+      expect(preventDefault).not.toHaveBeenCalled();
+      expect(Alert.alert).not.toHaveBeenCalled();
     });
   });
 });

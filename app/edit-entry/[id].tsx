@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { DiaryImageAttachmentField } from '@/components/diary-image-attachment-field';
 import { SaveToast } from '@/components/save-toast';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
@@ -22,6 +23,14 @@ import { useDraftAutoSave } from '@/hooks/use-draft-auto-save';
 import { useSaveDiaryEntry } from '@/hooks/use-save-diary-entry';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { DIARY_EDIT_DRAFT_STORAGE_KEY_PREFIX, loadDraftText } from '@/utils/diary-draft-storage';
+import {
+  commitDiaryImageDrafts,
+  deleteDiaryImages,
+  getRemovedDiaryImages,
+  isSameDiaryImageDrafts,
+  toDiaryImageDrafts,
+  type DiaryImageDraft,
+} from '@/utils/diary-images';
 import { BODY_MAX_LENGTH, splitIntoGraphemes, truncateToBodyMaxLength } from '@/utils/diary-text';
 import {
   DIARY_LOAD_ERROR_MESSAGE,
@@ -45,6 +54,7 @@ export default function EditEntryScreen() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [isLoadFailed, setIsLoadFailed] = useState(false);
   const [editDraft, setEditDraft] = useState('');
+  const [imageDrafts, setImageDrafts] = useState<DiaryImageDraft[]>([]);
   const { isSaving: isSavingEdit, error: editError, save: saveEdit } = useSaveDiaryEntry();
   // 下書き復元が完了したか。完了前に自動保存effectを動かすと、復元中の一時的な内容で
   // 保存済みの下書きを誤って上書き・削除してしまうため、完了までは自動保存の対象外にする
@@ -76,6 +86,11 @@ export default function EditEntryScreen() {
 
   const handleHideSaveToast = useCallback(() => {
     setSaveToastMessage(null);
+  }, []);
+
+  // 保存は完了済みのため、トーストを読み終えた利用者が残りの待ち時間を待たずに戻れるようにする
+  const skipNavigateBackDelay = useCallback(() => {
+    cancelNavigateBackDelayRef.current?.();
   }, []);
 
   const textColor = useThemeColor({}, 'text');
@@ -136,6 +151,7 @@ export default function EditEntryScreen() {
           return;
         }
         setEditDraft(textToShow);
+        setImageDrafts(toDiaryImageDrafts(found.images));
 
         // 切り詰めが発生した場合、日記本文の一部が失われたことにユーザーが気づけるよう
         // 一度きりの通知を出す(無編集のまま保存すると末尾が無言で失われてしまうため)
@@ -170,11 +186,26 @@ export default function EditEntryScreen() {
       return;
     }
 
+    let savedEntry: DiaryEntry = targetEntry;
     await saveEdit({
       text: editDraft,
-      persist: (trimmed) => saveDiaryEntry({ ...targetEntry, text: trimmed }),
+      persist: async (trimmed) => {
+        const { images, newlySaved } = commitDiaryImageDrafts(imageDrafts);
+        const { images: _previousImages, ...rest } = targetEntry;
+        savedEntry = { ...rest, text: trimmed, ...(images.length > 0 ? { images } : {}) };
+        try {
+          await saveDiaryEntry(savedEntry);
+        } catch (err) {
+          // 保存されなかった場合、今回コピーした画像はどこからも参照されないため消す
+          deleteDiaryImages(newlySaved);
+          throw err;
+        }
+      },
       onSuccess: async (trimmed) => {
-        entryRef.current = { ...targetEntry, text: trimmed };
+        // 差し替え・削除で参照されなくなった画像は、保存が確定してから消す
+        deleteDiaryImages(getRemovedDiaryImages(targetEntry.images, savedEntry.images));
+        entryRef.current = savedEntry;
+        setImageDrafts(toDiaryImageDrafts(savedEntry.images));
         // 保存成功後は「未保存の変更」ではなくなるため、破棄確認の基準(beforeRemoveの比較対象)を更新する
         editOriginalTextRef.current = trimmed;
 
@@ -187,8 +218,8 @@ export default function EditEntryScreen() {
         if (!isMountedRef.current) {
           return;
         }
-        // 待機中も保存処理中(isSavingEdit)のままにすることで、保存ボタンの再押下と本文入力を防ぎ、
-        // 戻る操作はbeforeRemoveでブロックされて待機完了後に再送される
+        // 待機中も保存処理中(isSavingEdit)のままにすることで、保存ボタンの再押下と本文入力を防ぐ。
+        // 戻る操作・トーストの「戻る」は残りの待機を打ち切り、すぐに前の画面へ戻す
         setSaveToastMessage(SAVE_SUCCESS_MESSAGE);
         // ホーム画面の保存成功時と同じ触覚フィードバックで一貫させる
         if (process.env.EXPO_OS === 'ios') {
@@ -216,7 +247,7 @@ export default function EditEntryScreen() {
       // 保存完了前にアンマウントされた場合の、アンマウント済みコンポーネントへのstate更新を避ける
       isMountedRef,
     });
-  }, [editDraft, router, saveEdit, clearDraft]);
+  }, [editDraft, imageDrafts, router, saveEdit, clearDraft]);
 
   // 画面を離れようとした際、未保存の変更がある場合のみ破棄確認ダイアログを挟む
   useEffect(() => {
@@ -226,9 +257,15 @@ export default function EditEntryScreen() {
       if (isSavingEdit) {
         event.preventDefault();
         pendingRemoveActionRef.current = event.data.action;
+        // 保存成功後の待機中であれば、待ち時間を打ち切ってすぐに戻す
+        skipNavigateBackDelay();
         return;
       }
-      if (editDraft.trim() === editOriginalTextRef.current.trim()) {
+      const hasImageChanges = !isSameDiaryImageDrafts(
+        imageDrafts,
+        toDiaryImageDrafts(entryRef.current?.images),
+      );
+      if (editDraft.trim() === editOriginalTextRef.current.trim() && !hasImageChanges) {
         return;
       }
       event.preventDefault();
@@ -246,7 +283,7 @@ export default function EditEntryScreen() {
       ]);
     });
     return unsubscribe;
-  }, [navigation, editDraft, isSavingEdit, clearDraft]);
+  }, [navigation, editDraft, imageDrafts, isSavingEdit, clearDraft, skipNavigateBackDelay]);
 
   // 保存完了(isSavingEdit: true→false)を検知したら、保存中にブロックしていた離脱アクションを再送する。
   // 保存失敗時は再送せず画面に留まる(lastSaveSucceededRefで判定)
@@ -306,6 +343,11 @@ export default function EditEntryScreen() {
           // 他の本文入力欄と同様、grapheme単位の切り詰めをonChangeText側で行うため
           // maxLength propはあえて指定しない
         />
+        <DiaryImageAttachmentField
+          drafts={imageDrafts}
+          onChange={setImageDrafts}
+          disabled={isSavingEdit}
+        />
         <ThemedView style={styles.footer}>
           <ThemedText
             style={[
@@ -347,7 +389,12 @@ export default function EditEntryScreen() {
           <ThemedText style={[styles.errorText, { color: errorColor }]}>{editError}</ThemedText>
         ) : null}
         {saveToastMessage ? (
-          <SaveToast message={saveToastMessage} onHide={handleHideSaveToast} />
+          <SaveToast
+            message={saveToastMessage}
+            onHide={handleHideSaveToast}
+            actionLabel="戻る"
+            onAction={skipNavigateBackDelay}
+          />
         ) : null}
       </ThemedView>
     </KeyboardAvoidingView>

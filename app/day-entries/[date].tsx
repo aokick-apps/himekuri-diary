@@ -3,9 +3,10 @@ import { randomUUID } from 'expo-crypto';
 import * as Haptics from 'expo-haptics';
 import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { Alert, FlatList, Pressable, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { DayEntryItem } from '@/components/day-entry-item';
 import { DiaryEntryComposerModal } from '@/components/diary-entry-composer-modal';
 import { SaveToast } from '@/components/save-toast';
 import { ThemedText } from '@/components/themed-text';
@@ -13,13 +14,9 @@ import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { SAVE_SUCCESS_MESSAGE } from '@/constants/diary-messages';
 import { useThemeColor } from '@/hooks/use-theme-color';
-import {
-  buildCreatedAtForDateKeyAtTime,
-  formatDateHeading,
-  formatEntryDateTime,
-  toDateKey,
-} from '@/utils/diary-date';
+import { buildCreatedAtForDateKeyAtTime, formatDateHeading, toDateKey } from '@/utils/diary-date';
 import { DIARY_DAY_ENTRIES_NEW_ENTRY_DRAFT_STORAGE_KEY_PREFIX } from '@/utils/diary-draft-storage';
+import { deleteDiaryImages } from '@/utils/diary-images';
 import {
   buildDiaryPartialCorruptionMessage,
   deleteDiaryEntry,
@@ -27,6 +24,7 @@ import {
   getAllDiaryEntries,
   saveDiaryEntry,
   type DiaryEntry,
+  type DiaryImage,
 } from '@/utils/diary-storage';
 
 const COPY_SUCCESS_MESSAGE = 'コピーしました';
@@ -40,11 +38,20 @@ function sortEntriesByCreatedAt(entries: DiaryEntry[]): DiaryEntry[] {
   });
 }
 
+// 検索結果から遷移した日記を強調表示しておく時間(ミリ秒)
+const HIGHLIGHT_DURATION_MS = 4000;
+// 強調する日記を画面のどの高さに表示するか(0: 上端〜1: 下端)。直前の日記も少し見えるようにする
+const HIGHLIGHT_VIEW_POSITION = 0.2;
+const SCROLL_RETRY_DELAY_MS = 100;
+
 // 指定した日付('YYYY-MM-DD')の日記一覧を表示する専用画面。
 // カレンダー画面のモーダルではなく独立した画面にすることで、削除時のフェードアウトや
 // 編集画面への遷移を画面単位で扱えるようにしている。
 export default function DayEntriesScreen() {
-  const { date } = useLocalSearchParams<{ date: string }>();
+  const { date, highlightEntryId } = useLocalSearchParams<{
+    date: string;
+    highlightEntryId?: string;
+  }>();
   const router = useRouter();
   const navigation = useNavigation();
   const [entries, setEntries] = useState<DiaryEntry[]>([]);
@@ -68,28 +75,95 @@ export default function DayEntriesScreen() {
   const loadRequestIdRef = useRef(0);
   activeDateRef.current = date;
   const [isComposerOpen, setIsComposerOpen] = useState(false);
+  const listRef = useRef<FlatList<DiaryEntry>>(null);
+  // 検索結果から遷移してきた場合に強調表示中の日記。同じ遷移で何度も強調し直さないよう適用済みのidも持つ
+  const [highlightedEntryId, setHighlightedEntryId] = useState<string | null>(null);
+  const appliedHighlightEntryIdRef = useRef<string | null>(null);
+  const scrollRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const tintColor = useThemeColor({}, 'tint');
-  const iconColor = useThemeColor({}, 'icon');
   const errorColor = useThemeColor({}, 'error');
   // この画面はタブバーを持たないため、セーフエリア下端ぶんのみモーダルコンテンツの下端に加算する
   const insets = useSafeAreaInsets();
+
+  // 削除の取り消し期限が過ぎた日記は二度と復元されないため、添付画像のファイルもこの時点で消す
+  const expirePendingDeletedEntries = useCallback(() => {
+    for (const entry of pendingDeletedEntriesRef.current) {
+      deleteDiaryImages(entry.images);
+    }
+    pendingDeletedEntriesRef.current = [];
+  }, []);
 
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
+      expirePendingDeletedEntries();
+      if (scrollRetryTimerRef.current !== null) {
+        clearTimeout(scrollRetryTimerRef.current);
+      }
     };
-  }, []);
+  }, [expirePendingDeletedEntries]);
+
+  useEffect(() => {
+    if (
+      !hasLoadedEntries ||
+      !highlightEntryId ||
+      appliedHighlightEntryIdRef.current === highlightEntryId
+    ) {
+      return;
+    }
+    const index = entries.findIndex((entry) => entry.id === highlightEntryId);
+    if (index === -1) {
+      return;
+    }
+    appliedHighlightEntryIdRef.current = highlightEntryId;
+    setHighlightedEntryId(highlightEntryId);
+    listRef.current?.scrollToIndex({
+      index,
+      animated: true,
+      viewPosition: HIGHLIGHT_VIEW_POSITION,
+    });
+  }, [hasLoadedEntries, entries, highlightEntryId]);
+
+  useEffect(() => {
+    if (highlightedEntryId === null) {
+      return;
+    }
+    const timer = setTimeout(() => setHighlightedEntryId(null), HIGHLIGHT_DURATION_MS);
+    return () => clearTimeout(timer);
+  }, [highlightedEntryId]);
+
+  // 未描画の位置へのscrollToIndexは失敗するため、平均の高さから近くまで移動して描画させてから再試行する
+  const handleScrollToIndexFailed = useCallback(
+    (info: { index: number; averageItemLength: number }) => {
+      listRef.current?.scrollToOffset({
+        offset: info.averageItemLength * info.index,
+        animated: false,
+      });
+      if (scrollRetryTimerRef.current !== null) {
+        clearTimeout(scrollRetryTimerRef.current);
+      }
+      scrollRetryTimerRef.current = setTimeout(() => {
+        scrollRetryTimerRef.current = null;
+        listRef.current?.scrollToIndex({
+          index: info.index,
+          animated: true,
+          viewPosition: HIGHLIGHT_VIEW_POSITION,
+        });
+      }, SCROLL_RETRY_DELAY_MS);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (previousDateRef.current !== date) {
-      pendingDeletedEntriesRef.current = [];
+      expirePendingDeletedEntries();
       setPendingDeletedEntries([]);
       setHasUndoError(false);
       previousDateRef.current = date;
     }
-  }, [date]);
+  }, [date, expirePendingDeletedEntries]);
 
   const handleOpenComposer = useCallback(() => {
     setIsComposerOpen(true);
@@ -161,7 +235,7 @@ export default function DayEntriesScreen() {
   // 新規作成モーダルの保存処理本体。createdAtの日付部分はこの画面が表示している日付に
   // 固定しつつ、時分秒は実際に保存した瞬間の時刻にする(buildCreatedAtForDateKeyAtTime)
   const handlePersistNewEntry = useCallback(
-    async (trimmed: string) => {
+    async (trimmed: string, images: DiaryImage[]) => {
       // 対象日付が無いまま成功扱いにしないよう、失敗として伝える
       if (!date) {
         throw new Error('対象日付が未設定です');
@@ -170,6 +244,7 @@ export default function DayEntriesScreen() {
         id: randomUUID(),
         text: trimmed,
         createdAt: buildCreatedAtForDateKeyAtTime(date),
+        ...(images.length > 0 ? { images } : {}),
       };
       // 体感速度を落とさないよう楽観的にUIを更新する(一覧は時刻昇順のため末尾に追加)
       setEntries((current) => [...current, newEntry]);
@@ -209,10 +284,10 @@ export default function DayEntriesScreen() {
     if (isRestoringDeletedEntriesRef.current) {
       return;
     }
-    pendingDeletedEntriesRef.current = [];
+    expirePendingDeletedEntries();
     setPendingDeletedEntries([]);
     setHasUndoError(false);
-  }, []);
+  }, [expirePendingDeletedEntries]);
 
   const handleCopyEntry = useCallback(async (entry: DiaryEntry) => {
     try {
@@ -397,52 +472,21 @@ export default function DayEntriesScreen() {
         />
       ) : null}
       <FlatList
+        ref={listRef}
         data={entries}
+        onScrollToIndexFailed={handleScrollToIndexFailed}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={renderEmptyEntries}
         keyboardDismissMode="on-drag"
         renderItem={({ item }) => (
-          <ThemedView style={[styles.entry, { borderBottomColor: iconColor }]}>
-            <View style={styles.entryHeader}>
-              <ThemedText style={styles.entryDate}>
-                {formatEntryDateTime(item.createdAt)}
-              </ThemedText>
-              <View style={styles.entryActions}>
-                <Pressable
-                  onPress={() => handleCopyEntry(item)}
-                  hitSlop={8}
-                  accessibilityRole="button"
-                  accessibilityLabel="日記本文をコピー"
-                >
-                  <ThemedText style={[styles.entryActionText, { color: tintColor }]}>
-                    コピー
-                  </ThemedText>
-                </Pressable>
-                <Pressable
-                  onPress={() => handleStartEdit(item)}
-                  hitSlop={8}
-                  accessibilityRole="button"
-                  accessibilityLabel="この日記を編集"
-                >
-                  <ThemedText style={[styles.entryActionText, { color: tintColor }]}>
-                    編集
-                  </ThemedText>
-                </Pressable>
-                <Pressable
-                  onPress={() => handleDeletePress(item)}
-                  hitSlop={8}
-                  accessibilityRole="button"
-                  accessibilityLabel="この日記を削除"
-                >
-                  <ThemedText style={[styles.entryActionText, { color: errorColor }]}>
-                    削除
-                  </ThemedText>
-                </Pressable>
-              </View>
-            </View>
-            <ThemedText>{item.text}</ThemedText>
-          </ThemedView>
+          <DayEntryItem
+            entry={item}
+            isHighlighted={item.id === highlightedEntryId}
+            onCopy={handleCopyEntry}
+            onEdit={handleStartEdit}
+            onDelete={handleDeletePress}
+          />
         )}
       />
       <DiaryEntryComposerModal
@@ -491,28 +535,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   retryButtonText: {
-    fontWeight: '600',
-  },
-  entry: {
-    gap: 4,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  entryHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  entryDate: {
-    fontSize: 12,
-    opacity: 0.6,
-  },
-  entryActions: {
-    flexDirection: 'row',
-    gap: 16,
-  },
-  entryActionText: {
-    fontSize: 14,
     fontWeight: '600',
   },
 });

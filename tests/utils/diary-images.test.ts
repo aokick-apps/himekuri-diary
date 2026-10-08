@@ -320,13 +320,14 @@ describe('restoreDiaryImagesFromBase64', () => {
     expect(mockedFileSystem.__existing.has(IMAGES_DIR)).toBe(true);
   });
 
-  it('overwrites an image that already exists with the same name (境界値: 同名上書き)', () => {
+  it('keeps an image that already exists with the same name instead of overwriting it (境界値: 同名スキップ)', () => {
     mockedFileSystem.__existing.add(`${IMAGES_DIR}/a.jpg`);
     mockedFileSystem.__contents.set(`${IMAGES_DIR}/a.jpg`, 'OLD=');
 
-    restoreDiaryImagesFromBase64(new Map([['a.jpg', 'QUJD']]));
+    const failed = restoreDiaryImagesFromBase64(new Map([['a.jpg', 'QUJD']]));
 
-    expect(mockedFileSystem.__contents.get(`${IMAGES_DIR}/a.jpg`)).toBe('QUJD');
+    expect(failed).toBe(0);
+    expect(mockedFileSystem.__contents.get(`${IMAGES_DIR}/a.jpg`)).toBe('OLD=');
   });
 
   it('counts images that failed to write and still restores the rest (異常系: 書き込み失敗)', () => {

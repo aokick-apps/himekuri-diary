@@ -8,7 +8,11 @@ import { ThemedText } from '@/components/themed-text';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { buildDiaryExportFileName, serializeDiaryEntriesForExport } from '@/utils/diary-export';
 import { downloadOnWeb, readPickedFileContent } from '@/utils/diary-file-transfer';
-import { readDiaryImagesAsBase64, restoreDiaryImagesFromBase64 } from '@/utils/diary-images';
+import {
+  isDiaryImageAttachmentSupported,
+  readDiaryImagesAsBase64,
+  restoreDiaryImagesFromBase64,
+} from '@/utils/diary-images';
 import { parseDiaryEntriesForImport } from '@/utils/diary-import';
 import {
   buildDiaryPartialCorruptionMessage,
@@ -251,7 +255,11 @@ export function ImportDiaryDataButton() {
           ? `\n${invalidCount}件のデータは形式が正しくないか文字数上限を超えていたためスキップされました。`
           : '';
       const imageNotice =
-        images.size > 0 ? `\n添付写真${images.size}枚もあわせて取り込みます。` : '';
+        images.size === 0
+          ? ''
+          : isDiaryImageAttachmentSupported()
+            ? `\n添付写真${images.size}枚もあわせて取り込みます。`
+            : '\nこの環境では添付写真は取り込まれません。';
       Alert.alert(
         '日記データをインポートしますか?',
         `${entries.length}件の日記データを取り込みます。同じ日記が既にある場合は、ファイルの内容で上書きされます。${imageNotice}${skippedNotice}`,

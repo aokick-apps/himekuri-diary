@@ -202,7 +202,7 @@ export async function readDiaryImagesAsBase64(
 
 /**
  * バックアップから取り出した画像本体を添付画像ディレクトリへ書き戻し、書き戻せなかった枚数を返す。
- * 同名の画像が既にある場合は上書きする。Webは画像を扱わないため何もしない。
+ * 同名の画像が既にある場合は上書きせずそのまま使う。Webは画像を扱わないため何もしない。
  */
 export function restoreDiaryImagesFromBase64(images: ReadonlyMap<string, string>): number {
   if (!isDiaryImageAttachmentSupported() || images.size === 0) {
@@ -215,7 +215,11 @@ export function restoreDiaryImagesFromBase64(images: ReadonlyMap<string, string>
   }
   for (const [fileName, base64] of images) {
     try {
-      getDiaryImageFile({ fileName }).write(base64, { encoding: 'base64' });
+      const file = getDiaryImageFile({ fileName });
+      // 同名のファイルは同じ参照として既に使われているため、既存の写真を壊さないよう上書きしない
+      if (!file.exists) {
+        file.write(base64, { encoding: 'base64' });
+      }
     } catch (error) {
       failedCount += 1;
       console.warn('restoreDiaryImagesFromBase64: 添付画像を書き戻せませんでした', error);

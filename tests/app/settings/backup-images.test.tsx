@@ -67,6 +67,7 @@ const mockedFileSystem = require('expo-file-system') as {
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const mockedDiaryImages = require('@/utils/diary-images') as {
+  isDiaryImageAttachmentSupported: jest.Mock;
   readDiaryImagesAsBase64: jest.Mock;
   restoreDiaryImagesFromBase64: jest.Mock;
 };
@@ -89,6 +90,7 @@ describe('添付写真を含む日記データのエクスポート/インポー
     (Sharing.shareAsync as jest.Mock).mockResolvedValue(undefined);
     mockedDiaryImages.readDiaryImagesAsBase64.mockResolvedValue(new Map());
     mockedDiaryImages.restoreDiaryImagesFromBase64.mockReturnValue(0);
+    mockedDiaryImages.isDiaryImageAttachmentSupported.mockReturnValue(true);
     jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   });
 
@@ -205,6 +207,15 @@ describe('添付写真を含む日記データのエクスポート/インポー
       ),
     );
     expect(await getAllDiaryEntries()).toEqual([entryWithImage]);
+  });
+
+  it('says photos are not imported instead of promising a count where attachments are unsupported (インポート: 画像添付非対応の環境)', async () => {
+    mockedDiaryImages.isDiaryImageAttachmentSupported.mockReturnValue(false);
+    await startImport(backupJson);
+
+    const [, message] = (Alert.alert as jest.Mock).mock.calls[0];
+    expect(message).not.toContain('添付写真1枚');
+    expect(message).toContain('この環境では添付写真は取り込まれません');
   });
 
   it('does not mention photos when importing a legacy backup without image data (インポート: 旧形式との後方互換)', async () => {

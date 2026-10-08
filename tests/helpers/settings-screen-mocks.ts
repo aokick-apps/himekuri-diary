@@ -18,6 +18,7 @@ export function createReminderNotificationsMock() {
 export function createDiaryImagesMock() {
   return {
     deleteAllDiaryImages: jest.fn(),
+    isDiaryImageAttachmentSupported: jest.fn(() => true),
     readDiaryImagesAsBase64: jest.fn(() => Promise.resolve(new Map<string, string>())),
     restoreDiaryImagesFromBase64: jest.fn(() => 0),
   };

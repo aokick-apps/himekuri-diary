@@ -2869,7 +2869,7 @@ describe('HomeScreen', () => {
       const nextMonth = now.getMonth() + 2;
       if (nextMonth <= 12) {
         const [futureMonthButton] = screen.UNSAFE_getAllByProps({
-          accessibilityLabel: `${now.getFullYear()}年${nextMonth}月(日記が無いため選択できません)`,
+          accessibilityLabel: `${now.getFullYear()}年${nextMonth}月(選択できません)`,
         });
         expect(futureMonthButton.props.accessibilityState?.disabled).toBe(true);
 
@@ -2921,10 +2921,21 @@ describe('HomeScreen', () => {
         jest.setSystemTime(afterYearBoundary);
         await openMonthPicker(beforeYearBoundary);
 
+        // 表示中の年(2026年)で開き、上限は年をまたいだ今日(2027年1月)まで広がっている
+        expect(screen.getByText('2026年')).toBeTruthy();
+        fireEvent.press(screen.getByLabelText('次の年'));
         expect(screen.getByText('2027年')).toBeTruthy();
-        expect(screen.queryByText('2026年')).toBeNull();
-        expect(screen.getByLabelText('前の年').props.accessibilityState?.disabled).toBe(true);
+        expect(screen.getByLabelText('次の年').props.accessibilityState?.disabled).toBe(true);
         expect(screen.getByLabelText('2027年1月へ移動').props.accessibilityState?.disabled).toBe(
+          false,
+        );
+        // 下限も年をまたいだ今日を基準に再計算され、日記が無くても10年前の1月まで遡れる
+        for (let i = 0; i < 10; i += 1) {
+          fireEvent.press(screen.getByLabelText('前の年'));
+        }
+        expect(screen.getByText('2017年')).toBeTruthy();
+        expect(screen.getByLabelText('前の年').props.accessibilityState?.disabled).toBe(true);
+        expect(screen.getByLabelText('2017年1月へ移動').props.accessibilityState?.disabled).toBe(
           false,
         );
       } finally {
@@ -3115,7 +3126,7 @@ describe('HomeScreen', () => {
 
       // 日記が無いため、当月以外は選択不可(disabled)ラベルになる
       const otherMonthIndex = (now.getMonth() + 6) % 12;
-      const otherMonthLabel = `${now.getFullYear()}年${MONTH_NAMES_JA[otherMonthIndex]}(日記が無いため選択できません)`;
+      const otherMonthLabel = `${now.getFullYear()}年${MONTH_NAMES_JA[otherMonthIndex]}(選択できません)`;
       const otherMonthButton = screen.getByLabelText(otherMonthLabel);
       expect(otherMonthButton.props.accessibilityState?.selected).toBe(false);
     });
@@ -3145,9 +3156,51 @@ describe('HomeScreen', () => {
       }
     });
 
-    it('uses the oldest diary month as the lower bound and disables earlier years/months in the picker (境界値)', async () => {
+    it('lets the picker go back to January ten years ago even with no diary entries, and disables earlier years (境界値: 日記が無い場合の下限)', async () => {
       const now = new Date();
-      const minYear = now.getFullYear() - 2;
+      render(<HomeScreen />);
+      await waitForInitialLoad();
+
+      await openMonthPicker(now);
+      for (let i = 0; i < 10; i += 1) {
+        fireEvent.press(screen.getByLabelText('前の年'));
+      }
+      const floorYear = now.getFullYear() - 10;
+      expect(screen.getByText(`${floorYear}年`)).toBeTruthy();
+      expect(screen.getByLabelText('前の年').props.accessibilityState?.disabled).toBe(true);
+      expect(
+        screen.getByLabelText(`${floorYear}年1月へ移動`).props.accessibilityState?.disabled,
+      ).toBe(false);
+    });
+
+    it('lets the picker select past months that have no diary entries, so diaries can be backdated (正常系: 過去日の日記作成)', async () => {
+      const now = new Date();
+      await AsyncStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify([
+          {
+            id: 'recent',
+            text: '今月の日記',
+            createdAt: new Date(now.getFullYear(), now.getMonth(), 15, 9, 0, 0).toISOString(),
+          },
+        ]),
+      );
+      render(<HomeScreen />);
+      await waitForInitialLoad();
+
+      await openMonthPicker(now);
+      fireEvent.press(screen.getByLabelText('前の年'));
+      const lastYearMonthButton = screen.getByLabelText(`${now.getFullYear() - 1}年3月へ移動`);
+      expect(lastYearMonthButton.props.accessibilityState?.disabled).toBe(false);
+
+      fireEvent.press(lastYearMonthButton);
+
+      expect(await findCalendarHeaderText(now.getFullYear() - 1, 3)).toBeTruthy();
+    });
+
+    it('uses the oldest diary month as the lower bound when it is older than ten years ago, and disables earlier years/months in the picker (境界値)', async () => {
+      const now = new Date();
+      const minYear = now.getFullYear() - 12;
       const minMonth = 4;
       const storedEntries = [
         {
@@ -3168,15 +3221,16 @@ describe('HomeScreen', () => {
       await waitForInitialLoad();
 
       await openMonthPicker(now);
-      fireEvent.press(screen.getByLabelText('前の年'));
-      fireEvent.press(screen.getByLabelText('前の年'));
+      for (let i = 0; i < 12; i += 1) {
+        fireEvent.press(screen.getByLabelText('前の年'));
+      }
       expect(screen.getByText(`${minYear}年`)).toBeTruthy();
 
       const prevYearButton = screen.getByLabelText('前の年');
       expect(prevYearButton.props.accessibilityState?.disabled).toBe(true);
 
       const beforeMinMonthButton = screen.getByLabelText(
-        `${minYear}年${minMonth - 1}月(日記が無いため選択できません)`,
+        `${minYear}年${minMonth - 1}月(選択できません)`,
       );
       expect(beforeMinMonthButton.props.accessibilityState?.disabled).toBe(true);
 
@@ -3184,19 +3238,38 @@ describe('HomeScreen', () => {
       expect(minMonthButton.props.accessibilityState?.disabled).toBe(false);
     });
 
-    it('sets minDate to the first day of the current month on the underlying Calendar component when there are no diary entries yet (正常系)', async () => {
+    it('sets minDate to January 1st ten years ago on the underlying Calendar component when there are no diary entries yet (正常系)', async () => {
       const now = new Date();
       render(<HomeScreen />);
       await waitForInitialLoad();
 
       const [calendar] = screen.UNSAFE_getAllByType(Calendar);
-      const expectedMinDate = `${now.getFullYear()}-${`${now.getMonth() + 1}`.padStart(2, '0')}-01`;
-      expect(calendar.props.minDate).toBe(expectedMinDate);
+      expect(calendar.props.minDate).toBe(`${now.getFullYear() - 10}-01-01`);
     });
 
-    it('sets minDate to the first day of the oldest diary entry month on the underlying Calendar component, not just the current month (境界値)', async () => {
+    it('keeps minDate at January 1st ten years ago when the oldest diary entry is newer than that (境界値)', async () => {
       const now = new Date();
-      const minYear = now.getFullYear() - 2;
+      await AsyncStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify([
+          {
+            id: 'oldest',
+            text: '最古の日記',
+            createdAt: new Date(now.getFullYear() - 2, 3, 15, 9, 0, 0).toISOString(),
+          },
+        ]),
+      );
+
+      render(<HomeScreen />);
+      await waitForInitialLoad();
+
+      const [calendar] = screen.UNSAFE_getAllByType(Calendar);
+      expect(calendar.props.minDate).toBe(`${now.getFullYear() - 10}-01-01`);
+    });
+
+    it('sets minDate to the first day of the oldest diary entry month on the underlying Calendar component when it is older than ten years ago (境界値)', async () => {
+      const now = new Date();
+      const minYear = now.getFullYear() - 12;
       const minMonth = 4;
       const storedEntries = [
         {
@@ -3227,7 +3300,7 @@ describe('HomeScreen', () => {
       try {
         const now = new Date(2026, 7, 25, 12, 0, 0);
         jest.setSystemTime(now);
-        const minYear = 2024;
+        const minYear = 2012;
         const minMonth = 3;
         await AsyncStorage.setItem(
           STORAGE_KEY,
@@ -3261,7 +3334,7 @@ describe('HomeScreen', () => {
           await screen.findByText(`${minYear}年${minMonth}月`, { includeHiddenElements: true }),
         ).toBeTruthy();
 
-        // 2024年3月1日(金曜)の直前、はみ出しセルとして描画される2024年2月29日はminDateにより
+        // 2012年3月1日(木曜)の直前、はみ出しセルとして描画される2012年2月29日はminDateにより
         // 過去日として無効化される
         const beforeMinDateCell = screen.getByLabelText(`${minYear}年2月29日、日記なし`);
         expect(beforeMinDateCell.props.accessibilityState?.disabled).toBe(true);
@@ -3280,18 +3353,44 @@ describe('HomeScreen', () => {
     // enableSwipeMonthsによるスワイプでの月送り自体はブロックしないため、範囲境界の実際の
     // 移動可否はonPressArrowLeft/onPressArrowRight/disableArrowLeft/disableArrowRightで検証する
     describe('カレンダーヘッダー矢印(タップ・スワイプ)による月送りの範囲制限', () => {
-      it('disables the left arrow and blocks moving to the previous month when there are no diary entries yet, since the displayed month is exactly the lower bound (境界値)', async () => {
+      it('enables the left arrow on the current month even when there are no diary entries yet, so past days can be backdated (正常系: 過去日の日記作成)', async () => {
         render(<HomeScreen />);
         await waitForInitialLoad();
 
         const [calendar] = screen.UNSAFE_getAllByType(Calendar);
-        expect(calendar.props.disableArrowLeft).toBe(true);
+        expect(calendar.props.disableArrowLeft).toBe(false);
 
         const subtractMonth = jest.fn();
         act(() => {
           calendar.props.onPressArrowLeft(subtractMonth);
         });
 
+        expect(subtractMonth).toHaveBeenCalledTimes(1);
+      });
+
+      it('disables the left arrow once the calendar reaches January ten years ago with no diary entries (境界値: 日記が無い場合の下限)', async () => {
+        const now = new Date();
+        const floorYear = now.getFullYear() - 10;
+        render(<HomeScreen />);
+        await waitForInitialLoad();
+
+        const [calendar] = screen.UNSAFE_getAllByType(Calendar);
+        act(() => {
+          calendar.props.onMonthChange({
+            year: floorYear,
+            month: 1,
+            day: 1,
+            timestamp: new Date(floorYear, 0, 1).getTime(),
+            dateString: `${floorYear}-01-01`,
+          });
+        });
+        expect(await findCalendarHeaderText(floorYear, 1)).toBeTruthy();
+        expect(calendar.props.disableArrowLeft).toBe(true);
+
+        const subtractMonth = jest.fn();
+        act(() => {
+          calendar.props.onPressArrowLeft(subtractMonth);
+        });
         expect(subtractMonth).not.toHaveBeenCalled();
       });
 
@@ -3315,7 +3414,7 @@ describe('HomeScreen', () => {
         try {
           const now = new Date(2026, 7, 25, 12, 0, 0);
           jest.setSystemTime(now);
-          const minYear = 2024;
+          const minYear = 2012;
           const minMonth = 3;
           await AsyncStorage.setItem(
             STORAGE_KEY,

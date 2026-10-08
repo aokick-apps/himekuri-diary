@@ -95,7 +95,15 @@ function getPickerMaxMonthIndex(today: Date): number {
   return getMonthIndex(today.getFullYear(), today.getMonth() + 1);
 }
 
+// 日記が無い月にも過去日の日記を書けるよう、カレンダー・年月ピッカーの下限は最古の日記の月に
+// かかわらず、少なくとも今年を含めてこの年数分の1月まで遡れるようにする
+const CALENDAR_MIN_YEARS_BACK = 10;
+
 function getPickerMinMonthIndex(entries: DiaryEntry[], pickerMaxMonthIndex: number): number {
+  const floorMonthIndex = getMonthIndex(
+    getYearFromMonthIndex(pickerMaxMonthIndex) - CALENDAR_MIN_YEARS_BACK,
+    1,
+  );
   const entryMonthIndexes = entries
     .map((entry) => {
       const createdAt = new Date(entry.createdAt);
@@ -106,10 +114,7 @@ function getPickerMinMonthIndex(entries: DiaryEntry[], pickerMaxMonthIndex: numb
     })
     .filter((monthIndex): monthIndex is number => monthIndex !== null);
 
-  if (entryMonthIndexes.length === 0) {
-    return pickerMaxMonthIndex;
-  }
-  return Math.min(Math.min(...entryMonthIndexes), pickerMaxMonthIndex);
+  return Math.min(floorMonthIndex, ...entryMonthIndexes);
 }
 
 function getYearFromMonthIndex(monthIndex: number): number {
@@ -1083,6 +1088,7 @@ export default function HomeScreen() {
                     maxDate={toDateKey(new Date())}
                     // 年月ピッカーで選択可能な最古月より過去へスワイプできてしまうと、
                     // ピッカーのクランプ処理と表示中の月が食い違うため下限を揃える
+                    // (下限自体は過去日の日記を書けるよう十分に過去へ取っている)
                     minDate={getFirstDayOfMonthKey(
                       pickerMinYear,
                       getMonthFromMonthIndex(pickerMinMonthIndex),
@@ -1243,7 +1249,7 @@ export default function HomeScreen() {
                         accessibilityRole="button"
                         accessibilityLabel={
                           isDisabled
-                            ? `${pickerYear}年${monthName}(日記が無いため選択できません)`
+                            ? `${pickerYear}年${monthName}(選択できません)`
                             : `${pickerYear}年${monthName}へ移動`
                         }
                         accessibilityState={{ selected: isSelected, disabled: isDisabled }}

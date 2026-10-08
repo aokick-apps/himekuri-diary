@@ -78,12 +78,16 @@ Read the exact versioned docs at https://docs.expo.dev/versions/v54.0.0/ before 
   `STATUS_TODO_ID`, `STATUS_IN_PROGRESS_ID`, `STATUS_UNDER_REVIEW_ID`, `STATUS_DONE_ID`)は
   GitHub Actionsのリポジトリ変数(`vars.*`)として登録済みで、各ワークフローの `env:` に渡している。
   エージェントは環境変数として直接参照できるので、都度 `gh project field-list` などで調べ直す必要はない
-- ステータス更新コマンド(ITEM_ID は `gh project item-list` で取得)
+- ステータス更新コマンド(ITEM_ID は `gh project item-add <番号> --owner <owner> --url <issue-url> --format json --jq .id` で取得。
+  既にProjectにあるIssueでも既存アイテムのIDが返る。`gh project item-list` は既定で30件しか返さないため、
+  使う場合は必ず `--limit` を明示する)
   ```bash
   GH_TOKEN=$PROJECTS_GH_TOKEN gh project item-edit --project-id $PROJECT_ID --field-id $STATUS_FIELD_ID \
     --id <ITEM_ID> --single-select-option-id $STATUS_IN_PROGRESS_ID
   ```
 - 作業開始時は `In Progress`、PR作成後は `Under Review`(reviewerとの修正ループ中もそのまま)に更新する。
+  ai-team.yml ではこの2つの更新をPMエージェントに任せず、ワークフローの前後のステップで決定的に行う
+  (セッション開始前に `In Progress`、終了後に `Closes #<番号>` を含むOpenなPRがあれば `Under Review`)。
   マージおよびその後の `Done` への更新はPMでは行わない(後述のとおりマージ自体を行わないため)。
   人間(オーナー)がマージした後、必要であれば手動で `Done` に更新する
 - reviewerのLGTM相当判定に至らず終了した場合も `In Progress` や `Todo` には戻さず `Under Review` のまま止め、人間が気づけるようにする

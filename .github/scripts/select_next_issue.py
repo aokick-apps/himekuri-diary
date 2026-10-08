@@ -23,6 +23,8 @@ import sys
 
 COST_WARNING_PREFIX = "⚠️ 費用が発生する可能性があります"
 STUCK_STATUSES = ("In Progress", "Under Review")
+# gh の list 系コマンドは既定で30件しか返さず、Projectのアイテム数を超えると取りこぼすため明示する。
+LIST_LIMIT = "1000"
 
 
 def is_cost_warning(body: str) -> bool:
@@ -113,13 +115,14 @@ def main() -> None:
     status_field_id = os.environ["STATUS_FIELD_ID"]
     status_todo_id = os.environ["STATUS_TODO_ID"]
 
-    now_issues = gh_json("issue", "list", "--state", "open", "--label", "now", "--json", "number,body")
-    next_issues = gh_json("issue", "list", "--state", "open", "--label", "next", "--json", "number,body")
-    open_prs = gh_json("pr", "list", "--state", "open", "--json", "number,title,body,headRefName")
-    all_prs = gh_json("pr", "list", "--state", "all", "--json", "number,title,body,headRefName")
+    now_issues = gh_json("issue", "list", "--state", "open", "--label", "now", "--json", "number,body", "--limit", LIST_LIMIT)
+    next_issues = gh_json("issue", "list", "--state", "open", "--label", "next", "--json", "number,body", "--limit", LIST_LIMIT)
+    open_prs = gh_json("pr", "list", "--state", "open", "--json", "number,title,body,headRefName", "--limit", LIST_LIMIT)
+    all_prs = gh_json("pr", "list", "--state", "all", "--json", "number,title,body,headRefName", "--limit", LIST_LIMIT)
 
     project_data = gh_json(
-        "project", "item-list", project_number, "--owner", project_owner, "--format", "json", token=projects_token
+        "project", "item-list", project_number, "--owner", project_owner, "--format", "json", "--limit", LIST_LIMIT,
+        token=projects_token,
     )
     project_items = {
         item["content"]["number"]: item

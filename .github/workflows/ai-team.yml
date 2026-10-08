@@ -87,6 +87,19 @@ jobs:
           fi
           echo "issue_number=$clean" >> "$GITHUB_OUTPUT"
 
+      # Statusの更新はLLMの手順遵守に依存させず、ここと最後のステップで決定的に行う。
+      # item-add は既にProjectにあるIssueでも既存アイテムのIDを返すため、item-listの件数上限に左右されない。
+      - name: ProjectのStatusをIn Progressに更新
+        id: project_item
+        env:
+          ISSUE_URL: ${{ github.server_url }}/${{ github.repository }}/issues/${{ steps.sanitize.outputs.issue_number }}
+        run: |
+          item_id="$(GH_TOKEN=$PROJECTS_GH_TOKEN gh project item-add "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" \
+            --url "$ISSUE_URL" --format json --jq '.id')"
+          GH_TOKEN=$PROJECTS_GH_TOKEN gh project item-edit --project-id "$PROJECT_ID" --field-id "$STATUS_FIELD_ID" \
+            --id "$item_id" --single-select-option-id "$STATUS_IN_PROGRESS_ID"
+          echo "item_id=$item_id" >> "$GITHUB_OUTPUT"
+
       - name: 日本語フォントのインストール(designerのPlaywrightスクリーンショット用)
         run: |
           sudo apt-get update
@@ -107,21 +120,20 @@ jobs:
             (Issueの選定自体は ai-team-scheduler.yml が既に済ませているので、選び直す必要はありません)
             以下の手順で実行してください。
 
-            重要: `gh project` で始まるコマンド(item-list, item-add, item-edit など)は
+            重要: `gh project` で始まるコマンド(item-add など)は
             必ず先頭に `GH_TOKEN=$PROJECTS_GH_TOKEN` を付けて実行すること。
             (通常のGH_TOKENはこのセッション用のbotトークンで、Organization配下の
             Projectを読み書きする権限がないため、専用のPROJECTS_GH_TOKENに
             明示的に差し替える必要がある。issue/PR操作は素の `gh` のままでよい)
 
-            Status更新は毎回このコマンドの `--single-select-option-id` だけを差し替えて実行する:
-            `GH_TOKEN=$PROJECTS_GH_TOKEN gh project item-edit --project-id $PROJECT_ID --field-id $STATUS_FIELD_ID --id <ITEM_ID> --single-select-option-id <option-id>`
+            **対象IssueのProject Status(In Progress / Under Review)はワークフローの前後のステップが
+            自動で更新するため、このセッション内で対象Issueの Status を変更する必要はない(変更しないこと)。**
+            Under Review への更新は、このセッション終了後に「`Closes #${{ steps.sanitize.outputs.issue_number }}` を
+            本文に含むOpenなPRが存在するか」で判定される。そのためPR本文の `Closes #<番号>` は必ず入れること。
 
             ## 実装
 
-            0. `GH_TOKEN=$PROJECTS_GH_TOKEN gh project item-list $PROJECT_NUMBER --owner $PROJECT_OWNER --format json` で
-               この Issue に対応する Project item を探し、ITEM_ID を控える
-               (見つからない場合は `GH_TOKEN=$PROJECTS_GH_TOKEN gh project item-add $PROJECT_NUMBER --owner $PROJECT_OWNER --url <issue-url>` で追加する)。
-            1. Status を In Progress ($STATUS_IN_PROGRESS_ID) に更新する。
+            1. (Status は既に In Progress に更新済み)
             2. 要件を明確化し、実装タスクに分解する。
 
             **重要な制約(必須)**: 実装・インフラ選定は必ず無料で完結する方法のみを採用すること。
@@ -143,7 +155,7 @@ jobs:
                 - ## 対応したIssue(番号とリンク)
                 - ## 変更内容
                作成後 `gh pr view --json number --jq '.number'` でPR番号を控える(以降reviewer/coderに伝える)。
-            7. PRを作成したら、Status を Under Review ($STATUS_UNDER_REVIEW_ID) に更新する。
+            7. (Status の Under Review への更新はセッション終了後にワークフローが自動で行う)
 
             ## 実レビュー(reviewer)
 
@@ -230,6 +242,24 @@ jobs:
             (このステップ以降のワークフロー内で自動的にArtifactsへアップロードされる)。
           claude_args: |
             --max-turns 80 --allowedTools "Bash,Read,Write,Edit,Grep,Glob,Task"
+
+      - name: PRが作成されていればProjectのStatusをUnder Reviewに更新
+        if: always() && steps.project_item.outputs.item_id != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ steps.sanitize.outputs.issue_number }}
+          ITEM_ID: ${{ steps.project_item.outputs.item_id }}
+        run: |
+          pr_count="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --limit 100 \
+            --json closingIssuesReferences \
+            --jq "[.[] | select(any(.closingIssuesReferences[]; .number == $ISSUE_NUMBER))] | length")"
+          if [ "$pr_count" = "0" ]; then
+            echo "Issue #$ISSUE_NUMBER を Closes するOpenなPRが無いため、Statusは In Progress のままにします。"
+            exit 0
+          fi
+          GH_TOKEN=$PROJECTS_GH_TOKEN gh project item-edit --project-id "$PROJECT_ID" --field-id "$STATUS_FIELD_ID" \
+            --id "$ITEM_ID" --single-select-option-id "$STATUS_UNDER_REVIEW_ID"
+          echo "Issue #$ISSUE_NUMBER の Status を Under Review に更新しました。"
 
       - name: UI/UXレビューのスクリーンショットをArtifactsへ保存
         if: always()

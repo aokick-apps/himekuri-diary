@@ -18,8 +18,6 @@ import {
   type DiaryEntry,
 } from '@/utils/diary-storage';
 
-// 保存済みの日記データ(AsyncStorage上の全件)を削除する操作導線。
-// Google Play/Apple双方のストア審査で求められる「ユーザーによるデータ削除手段」に対応する
 // 処理中はスピナーと進行中の文言に切り替え、他の保存ボタンと同じく実行中であることを明示する
 function DataTransferButtonLabel({
   label,
@@ -41,6 +39,8 @@ function DataTransferButtonLabel({
   );
 }
 
+// 保存済みの日記データ(AsyncStorage上の全件)を削除する操作導線。
+// Google Play/Apple双方のストア審査で求められる「ユーザーによるデータ削除手段」に対応する
 export function DeleteAllDiaryDataButton() {
   const [isDeleting, setIsDeleting] = useState(false);
   const errorColor = useThemeColor({}, 'error');
@@ -242,7 +242,7 @@ export function ImportDiaryDataButton() {
           { text: '取り込む', onPress: () => importEntries(entries) },
         ],
         // Androidは既定でcancelable: falseのため、戻る操作・外側タップで閉じられるようにした上で、
-        // ボタンのonPressが呼ばれないその場合もonDismissで解除し、取り込みボタンの固着を防ぐ
+        // ボタンのonPressが呼ばれずに閉じた場合もonDismissで解除し、取り込みボタンの固着を防ぐ
         { cancelable: true, onDismiss: () => setIsImporting(false) },
       );
     },

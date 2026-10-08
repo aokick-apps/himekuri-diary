@@ -356,6 +356,15 @@ function getModalContentTouchAbsorber(modal: TestNode): TestNode {
 
 // 初回の日記読み込みが完了し、ローディング表示が消えるまで待つ(`getItem`の呼び出しだけでは
 // `setEntries`等のstate更新の完了を保証できず、act警告や次のテストへの漏れの原因になる)
+// renderを呼ばないテストではscreenへの問い合わせ自体が例外になるため、未描画は「FlatList無し」として扱う
+function isFlatListMounted(): boolean {
+  try {
+    return screen.UNSAFE_queryAllByType(FlatList).length > 0;
+  } catch {
+    return false;
+  }
+}
+
 async function waitForInitialLoad() {
   await waitFor(() => expect(screen.UNSAFE_queryAllByType(ActivityIndicator)).toHaveLength(0));
 }
@@ -397,17 +406,14 @@ describe('HomeScreen', () => {
     mockRandomUUID.mockImplementation(() => `mock-uuid-${uuidCounter++}`);
   });
 
-  // FlatList(VirtualizedList)は初回マウント・更新のたびに、表示するセルの範囲を再計算する
-  // `updateCellsBatchingPeriod`(既定50ms)のsetTimeoutを内部で予約する。`@testing-library/react-native`の
-  // 自動アンマウント(モジュール読み込み時に最上位で登録される`afterEach`)はマイクロタスク1回分しか
-  // 待たずにunmountするため、CPU負荷が高い環境ではこのタイマーがunmount前後どちらで発火するか
-  // タイミング競合し、act()外でのstate更新警告(`An update to VirtualizedList ... was not wrapped in
-  // act(...)`)を引き起こすことがある。Jestはネストした`describe`内の`afterEach`を
-  // 外側(モジュールレベル)より先に実行するため、ここで実際のマウント状態のまま50msより長く待つことで、
-  // 予約されていたタイマーをunmountされる前に確実にact()内で発火させ、警告の発生を防ぐ。
+  // FlatList(VirtualizedList)はマウント中にセル範囲再計算のタイマー(既定50ms)を予約し、自動アンマウントの
+  // 前後どちらで発火するかで act() 外の更新警告が出ることがある。実時間で待つのは遅いため、
+  // FlatList(検索結果一覧)を表示しているテストに限り、アンマウント前に act() 内で発火させる
   afterEach(async () => {
     await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 60));
+      if (isFlatListMounted()) {
+        await new Promise((resolve) => setTimeout(resolve, 60));
+      }
     });
     jest.useRealTimers();
   });

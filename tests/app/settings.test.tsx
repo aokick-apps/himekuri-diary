@@ -61,7 +61,7 @@ jest.mock('@/utils/app-lock-authentication', () => ({
 // `expo-file-system`(新API)はJest環境ではネイティブモジュールが存在せず、`Paths.cache`の参照時点で
 // 例外になるため、固定のURIを返す`Paths.cache`と書き込み内容を記録できる`File`のモックに差し替える。
 // `Paths.cache`を「取得できない」状態に上書きできるよう外側のクロージャ変数(`state`)に持たせ、
-// テストファイルと`app/(tabs)/settings.tsx`のどちらの`import`経由でも同じ実体を読み書きできるようにする。
+// テストファイルと設定画面の各部品(`components/settings/`・`utils/diary-file-transfer.ts`)のどちらの`import`経由でも同じ実体を読み書きできるようにする。
 jest.mock('expo-file-system', () => {
   const state: { cacheDirectoryUri: string | null } = { cacheDirectoryUri: 'file:///mock-cache/' };
   const write = jest.fn();

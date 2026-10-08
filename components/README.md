@@ -13,6 +13,15 @@ components/
   onboarding.tsx                  初回起動時に表示する使い方説明のオンボーディング画面
   save-toast.tsx                  保存成功時などに一時的なフィードバックを表示するトースト(スナックバー)
   segmented-option-selector.tsx   選択肢の中から1つだけ選ぶボタン列(設定画面の外観・カレンダー表示レイアウトなど)
+  settings/                       設定画面(app/(tabs)/settings.tsx)を構成する各セクション
+    appearance-section.tsx        「外観」(ライト/ダーク/端末に合わせる)
+    calendar-layout-section.tsx   「カレンダー表示レイアウト」(月表示/週表示)
+    diary-reminder-section.tsx    「リマインダー」(ON/OFFと通知時刻)
+    time-stepper.tsx              リマインダー時刻の「時」「分」を増減するステッパー(長押しで連続増減)
+    app-lock-section.tsx          「アプリロック」(ON/OFF)
+    settings-menu-link.tsx        法的情報・サポートのメニュー項目のリンク
+    data-management-buttons.tsx   「データ管理」のエクスポート・インポート・全件削除ボタン
+    settings-styles.ts            上記セクションで共通の見出し・行レイアウトのスタイル
   tab-screen-container.tsx        タブ画面共通のルートコンテナ(セーフエリア上端の余白を自動加算)
   themed-text.tsx                 ライト/ダークテーマに対応したTextコンポーネント
   themed-view.tsx                 ライト/ダークテーマに対応したViewコンポーネント

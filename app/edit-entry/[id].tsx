@@ -22,6 +22,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { SAVE_SUCCESS_MESSAGE } from '@/constants/diary-messages';
 import { useDraftAutoSave } from '@/hooks/use-draft-auto-save';
+import { useKeyboardVisible } from '@/hooks/use-keyboard-visible';
 import { useSaveDiaryEntry } from '@/hooks/use-save-diary-entry';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { DIARY_EDIT_DRAFT_STORAGE_KEY_PREFIX, loadDraftText } from '@/utils/diary-draft-storage';
@@ -57,6 +58,7 @@ export default function EditEntryScreen() {
   // KeyboardAvoidingViewは自身の位置を考慮しないため、Stackのヘッダーの高さ分だけ余分に持ち上げないと
   // 保存ボタンがキーボードの裏に隠れる
   const headerHeight = useContext(HeaderHeightContext) ?? 0;
+  const isKeyboardVisible = useKeyboardVisible();
 
   const [isLoaded, setIsLoaded] = useState(false);
   const [isLoadFailed, setIsLoadFailed] = useState(false);
@@ -338,7 +340,11 @@ export default function EditEntryScreen() {
       keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight : 0}
     >
       <ThemedView
-        style={[styles.container, { paddingBottom: 16 + insets.bottom }]}
+        style={[
+          styles.container,
+          // キーボード表示中は下端のセーフエリアをキーボードが覆うため、その分の余白は取らない
+          { paddingBottom: 16 + (isKeyboardVisible ? 0 : insets.bottom) },
+        ]}
         testID="edit-entry-container"
       >
         <TextInput

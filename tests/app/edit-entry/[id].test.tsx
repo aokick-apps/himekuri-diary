@@ -4,7 +4,7 @@ import * as Haptics from 'expo-haptics';
 import * as SecureStore from 'expo-secure-store';
 import React from 'react';
 import { HeaderHeightContext } from '@react-navigation/elements';
-import { Alert, KeyboardAvoidingView, StyleSheet } from 'react-native';
+import { Alert, Keyboard, KeyboardAvoidingView, StyleSheet } from 'react-native';
 
 import EditEntryScreen, { EDIT_ENTRY_INPUT_ACCESSORY_ID } from '@/app/edit-entry/[id]';
 import { decryptText, encryptText, getOrCreateEncryptionKey } from '@/utils/diary-encryption';
@@ -1852,6 +1852,24 @@ describe('EditEntryScreen', () => {
       await seedAndRender(<EditEntryScreen />);
 
       expect(screen.UNSAFE_getByType(KeyboardAvoidingView).props.keyboardVerticalOffset).toBe(0);
+    });
+
+    it('drops the bottom safe-area padding only while the keyboard is shown, since the keyboard covers that area (正常系: 余白の二重取り防止)', async () => {
+      mockSafeAreaBottom = 34;
+      jest.spyOn(Keyboard, 'addListener');
+      await seedAndRender(<EditEntryScreen />);
+      const container = screen.getByTestId('edit-entry-container');
+      const paddingWithoutKeyboard = StyleSheet.flatten(container.props.style).paddingBottom;
+
+      const showListener = (Keyboard.addListener as jest.Mock).mock.calls.find(
+        ([eventName]) => eventName === 'keyboardWillShow',
+      )?.[1];
+      act(() => showListener());
+
+      expect(
+        StyleSheet.flatten(screen.getByTestId('edit-entry-container').props.style).paddingBottom,
+      ).toBe(16);
+      expect(paddingWithoutKeyboard).toBe(16 + 34);
     });
 
     it('links the body input to the keyboard accessory that offers a "完了" button to close the keyboard (正常系)', async () => {

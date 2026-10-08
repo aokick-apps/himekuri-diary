@@ -553,7 +553,7 @@ describe('DayEntriesScreen', () => {
       const dataIntegrityToast = screen.getByTestId('data-integrity-toast');
       expect(dataIntegrityToast).toBeTruthy();
       // 保存成功トースト(緑色)と誤認しないよう、警告色(variant="warning")で表示されることを確認する
-      expect(StyleSheet.flatten(dataIntegrityToast.props.style).backgroundColor).toBe('#e65100');
+      expect(StyleSheet.flatten(dataIntegrityToast.props.style).backgroundColor).toBe('#bf360c');
       expect(screen.getByText(buildDiaryPartialCorruptionMessage(1))).toBeTruthy();
     });
   });
@@ -788,6 +788,53 @@ describe('DayEntriesScreen', () => {
       expect(await screen.findByText(laterEntry.text)).toBeTruthy();
       expect(await AsyncStorage.getItem(buildDiaryEntryKey(earlierEntry.id))).not.toBeNull();
       expect(await AsyncStorage.getItem(buildDiaryEntryKey(laterEntry.id))).not.toBeNull();
+    });
+
+    it('deletes a different entry confirmed while another deletion is still in flight (正常系: 削除処理中の別エントリ削除)', async () => {
+      const firstEntry = { id: '1', text: '先に削除する日記', createdAt: localIso(DATE_KEY, 8, 0) };
+      const secondEntry = {
+        id: '2',
+        text: '後から削除する日記',
+        createdAt: localIso(DATE_KEY, 18, 0),
+      };
+      await seedDiaryEntries([firstEntry, secondEntry]);
+      jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+      const originalRemoveItem = AsyncStorage.removeItem;
+      let releaseFirstRemoval: () => void = () => {};
+      jest.spyOn(AsyncStorage, 'removeItem').mockImplementationOnce(
+        (key: string) =>
+          new Promise<void>((resolve) => {
+            releaseFirstRemoval = () => {
+              originalRemoveItem(key).then(() => resolve());
+            };
+          }),
+      );
+
+      render(<DayEntriesScreen />);
+      await screen.findByText(secondEntry.text);
+
+      fireEvent.press(screen.getAllByText('削除')[0]);
+      let latestButtons = (Alert.alert as jest.Mock).mock.calls.at(-1)?.[2];
+      act(() => {
+        latestButtons.find((button: { text: string }) => button.text === '削除').onPress();
+      });
+      await waitFor(() => expect(screen.queryByText(firstEntry.text)).toBeNull());
+
+      fireEvent.press(screen.getByText('削除'));
+      latestButtons = (Alert.alert as jest.Mock).mock.calls.at(-1)?.[2];
+      await act(async () => {
+        await latestButtons.find((button: { text: string }) => button.text === '削除').onPress();
+      });
+
+      expect(screen.queryByText(secondEntry.text)).toBeNull();
+      expect(await AsyncStorage.getItem(buildDiaryEntryKey(secondEntry.id))).toBeNull();
+
+      await act(async () => {
+        releaseFirstRemoval();
+      });
+
+      expect(await screen.findByText('2件の日記を削除しました')).toBeTruthy();
+      expect(await AsyncStorage.getItem(buildDiaryEntryKey(firstEntry.id))).toBeNull();
     });
 
     it('expires the pending undo when the route changes to another date', async () => {

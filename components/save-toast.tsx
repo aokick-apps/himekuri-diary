@@ -9,10 +9,12 @@ const AUTO_HIDE_DELAY_MS = 2500;
 export type SaveToastVariant = 'success' | 'warning';
 
 // 成功(保存・コピー等)とは視覚的に区別する必要がある警告(データ破損通知等)を
-// 同じトーストの背景色で誤認させないよう、variantごとに色を分ける
-const VARIANT_BACKGROUND_COLORS: Record<SaveToastVariant, string> = {
+// 同じトーストの背景色で誤認させないよう、variantごとに色を分ける。
+// いずれも白文字(14px)に対してWCAG AAの4.5:1以上を満たす色にする
+export const SAVE_TOAST_TEXT_COLOR = '#fff';
+export const VARIANT_BACKGROUND_COLORS: Record<SaveToastVariant, string> = {
   success: '#2e7d32',
-  warning: '#e65100',
+  warning: '#bf360c',
 };
 
 export type SaveToastProps = {
@@ -59,7 +61,11 @@ export function SaveToast({
       accessibilityLiveRegion="polite"
       testID={testID}
     >
-      <ThemedText style={styles.text} lightColor="#fff" darkColor="#fff">
+      <ThemedText
+        style={styles.text}
+        lightColor={SAVE_TOAST_TEXT_COLOR}
+        darkColor={SAVE_TOAST_TEXT_COLOR}
+      >
         {message}
       </ThemedText>
       {actionLabel && onAction ? (
@@ -69,7 +75,11 @@ export function SaveToast({
           accessibilityLabel={actionLabel}
           hitSlop={8}
         >
-          <ThemedText style={styles.actionText} lightColor="#fff" darkColor="#fff">
+          <ThemedText
+            style={styles.actionText}
+            lightColor={SAVE_TOAST_TEXT_COLOR}
+            darkColor={SAVE_TOAST_TEXT_COLOR}
+          >
             {actionLabel}
           </ThemedText>
         </Pressable>

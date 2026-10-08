@@ -58,7 +58,8 @@ export default function DayEntriesScreen() {
   const [hasUndoError, setHasUndoError] = useState(false);
   const pendingDeletedEntriesRef = useRef<DiaryEntry[]>([]);
   const isRestoringDeletedEntriesRef = useRef(false);
-  const isDeletingEntryRef = useRef(false);
+  // 同じエントリの多重削除だけを防ぎ、別エントリの削除は並行して受け付けるためIDごとに管理する
+  const deletingEntryIdsRef = useRef(new Set<string>());
   const isMountedRef = useRef(true);
   const activeDateRef = useRef(date);
   const previousDateRef = useRef(date);
@@ -280,10 +281,10 @@ export default function DayEntriesScreen() {
 
   const handleDeleteEntry = useCallback(
     async (entry: DiaryEntry) => {
-      if (isDeletingEntryRef.current) {
+      if (deletingEntryIdsRef.current.has(entry.id)) {
         return;
       }
-      isDeletingEntryRef.current = true;
+      deletingEntryIdsRef.current.add(entry.id);
       const deleteDate = date;
       setEntries((current) => current.filter((item) => item.id !== entry.id));
 
@@ -302,12 +303,17 @@ export default function DayEntriesScreen() {
         if (!isMountedRef.current || activeDateRef.current !== deleteDate) {
           return;
         }
+        deletingEntryIdsRef.current.delete(entry.id);
         await loadEntries();
         if (isMountedRef.current) {
+          // 再読み込み結果には並行して削除中の別エントリがまだ残っているため除外する
+          setEntries((current) =>
+            current.filter((item) => !deletingEntryIdsRef.current.has(item.id)),
+          );
           Alert.alert('削除に失敗しました', 'もう一度お試しください。');
         }
       } finally {
-        isDeletingEntryRef.current = false;
+        deletingEntryIdsRef.current.delete(entry.id);
       }
     },
     [date, loadEntries],

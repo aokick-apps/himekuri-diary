@@ -78,6 +78,11 @@ export default function EditEntryScreen() {
     setSaveToastMessage(null);
   }, []);
 
+  // 保存は完了済みのため、トーストを読み終えた利用者が残りの待ち時間を待たずに戻れるようにする
+  const skipNavigateBackDelay = useCallback(() => {
+    cancelNavigateBackDelayRef.current?.();
+  }, []);
+
   const textColor = useThemeColor({}, 'text');
   const tintColor = useThemeColor({}, 'tint');
   const backgroundColor = useThemeColor({}, 'background');
@@ -187,8 +192,8 @@ export default function EditEntryScreen() {
         if (!isMountedRef.current) {
           return;
         }
-        // 待機中も保存処理中(isSavingEdit)のままにすることで、保存ボタンの再押下と本文入力を防ぎ、
-        // 戻る操作はbeforeRemoveでブロックされて待機完了後に再送される
+        // 待機中も保存処理中(isSavingEdit)のままにすることで、保存ボタンの再押下と本文入力を防ぐ。
+        // 戻る操作・トーストの「戻る」は残りの待機を打ち切り、すぐに前の画面へ戻す
         setSaveToastMessage(SAVE_SUCCESS_MESSAGE);
         // ホーム画面の保存成功時と同じ触覚フィードバックで一貫させる
         if (process.env.EXPO_OS === 'ios') {
@@ -226,6 +231,8 @@ export default function EditEntryScreen() {
       if (isSavingEdit) {
         event.preventDefault();
         pendingRemoveActionRef.current = event.data.action;
+        // 保存成功後の待機中であれば、待ち時間を打ち切ってすぐに戻す
+        skipNavigateBackDelay();
         return;
       }
       if (editDraft.trim() === editOriginalTextRef.current.trim()) {
@@ -246,7 +253,7 @@ export default function EditEntryScreen() {
       ]);
     });
     return unsubscribe;
-  }, [navigation, editDraft, isSavingEdit, clearDraft]);
+  }, [navigation, editDraft, isSavingEdit, clearDraft, skipNavigateBackDelay]);
 
   // 保存完了(isSavingEdit: true→false)を検知したら、保存中にブロックしていた離脱アクションを再送する。
   // 保存失敗時は再送せず画面に留まる(lastSaveSucceededRefで判定)
@@ -347,7 +354,12 @@ export default function EditEntryScreen() {
           <ThemedText style={[styles.errorText, { color: errorColor }]}>{editError}</ThemedText>
         ) : null}
         {saveToastMessage ? (
-          <SaveToast message={saveToastMessage} onHide={handleHideSaveToast} />
+          <SaveToast
+            message={saveToastMessage}
+            onHide={handleHideSaveToast}
+            actionLabel="戻る"
+            onAction={skipNavigateBackDelay}
+          />
         ) : null}
       </ThemedView>
     </KeyboardAvoidingView>

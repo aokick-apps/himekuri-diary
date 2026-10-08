@@ -575,7 +575,7 @@ describe('EditEntryScreen', () => {
       }
     });
 
-    it('blocks a leave attempt made while waiting to navigate back and navigates only once after the delay (戻る操作)', async () => {
+    it('skips the remaining wait and navigates back only once when the user tries to leave while waiting after a successful save (戻る操作)', async () => {
       jest.useFakeTimers();
       try {
         jest.spyOn(Alert, 'alert').mockImplementation(() => {});
@@ -583,20 +583,63 @@ describe('EditEntryScreen', () => {
         await screen.findByTestId('save-toast');
 
         const preventDefault = jest.fn();
-        getBeforeRemoveListener()(buildBeforeRemoveEvent(preventDefault));
+        await act(async () => {
+          getBeforeRemoveListener()(buildBeforeRemoveEvent(preventDefault));
+        });
+        // 破棄確認は出さずにいったん止めたうえで、待ち時間を経過させなくても1回だけ戻る
         expect(preventDefault).toHaveBeenCalledTimes(1);
         expect(Alert.alert).not.toHaveBeenCalled();
-        expect(mockDispatch).not.toHaveBeenCalled();
+        await waitFor(() => expect(mockDispatch).toHaveBeenCalledTimes(1));
 
         await act(async () => {
           jest.advanceTimersByTime(NAVIGATE_BACK_DELAY_AFTER_SAVE_MS);
         });
-
         expect(mockDispatch).toHaveBeenCalledTimes(1);
         expect(Alert.alert).not.toHaveBeenCalled();
       } finally {
         jest.useRealTimers();
       }
+    });
+
+    it('navigates back immediately when the "戻る" action on the save toast is pressed, without waiting for the delay (正常系: 待機の短縮)', async () => {
+      jest.useFakeTimers();
+      try {
+        await renderAndPressSave('トーストから戻る日記', 'トーストから戻る編集後の日記');
+        await screen.findByTestId('save-toast');
+        expect(mockBack).not.toHaveBeenCalled();
+
+        await act(async () => {
+          fireEvent.press(screen.getByRole('button', { name: '戻る' }));
+        });
+
+        await waitFor(() => expect(mockBack).toHaveBeenCalledTimes(1));
+        await act(async () => {
+          jest.advanceTimersByTime(NAVIGATE_BACK_DELAY_AFTER_SAVE_MS);
+        });
+        expect(mockBack).toHaveBeenCalledTimes(1);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('does not offer the "戻る" toast action when the save fails (異常系: 保存失敗時は画面に留まる)', async () => {
+      await seedDiaryEntry({
+        id: ENTRY_ID,
+        text: '失敗する日記',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      });
+      render(<EditEntryScreen />);
+      const input = await screen.findByDisplayValue('失敗する日記');
+      fireEvent.changeText(input, '失敗する編集後の日記');
+      jest.spyOn(AsyncStorage, 'setItem').mockRejectedValueOnce(new Error('write failed'));
+
+      await act(async () => {
+        fireEvent.press(screen.getByRole('button', { name: '保存' }));
+      });
+
+      expect(await screen.findByText('更新に失敗しました。もう一度お試しください。')).toBeTruthy();
+      expect(screen.queryByRole('button', { name: '戻る' })).toBeNull();
+      expect(mockBack).not.toHaveBeenCalled();
     });
 
     it('does not navigate back and releases its timers when unmounted while waiting to navigate back (アンマウント)', async () => {

@@ -354,8 +354,6 @@ function getModalContentTouchAbsorber(modal: TestNode): TestNode {
   return candidates[0];
 }
 
-// 初回の日記読み込みが完了し、ローディング表示が消えるまで待つ(`getItem`の呼び出しだけでは
-// `setEntries`等のstate更新の完了を保証できず、act警告や次のテストへの漏れの原因になる)
 // renderを呼ばないテストではscreenへの問い合わせ自体が例外になるため、未描画は「FlatList無し」として扱う
 function isFlatListMounted(): boolean {
   try {
@@ -365,6 +363,8 @@ function isFlatListMounted(): boolean {
   }
 }
 
+// 初回の日記読み込みが完了し、ローディング表示が消えるまで待つ(`getItem`の呼び出しだけでは
+// `setEntries`等のstate更新の完了を保証できず、act警告や次のテストへの漏れの原因になる)
 async function waitForInitialLoad() {
   await waitFor(() => expect(screen.UNSAFE_queryAllByType(ActivityIndicator)).toHaveLength(0));
 }

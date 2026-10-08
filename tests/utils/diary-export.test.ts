@@ -1,5 +1,10 @@
 import type { DiaryEntry } from '@/utils/diary-storage';
-import { buildDiaryExportFileName, serializeDiaryEntriesForExport } from '@/utils/diary-export';
+import {
+  buildDiaryExportFileName,
+  serializeDiaryEntriesForExport,
+  DIARY_BACKUP_FORMAT,
+  DIARY_BACKUP_VERSION,
+} from '@/utils/diary-export';
 
 describe('buildDiaryExportFileName', () => {
   it('builds a file name that embeds the given date down to the second (正常系)', () => {
@@ -87,5 +92,34 @@ describe('serializeDiaryEntriesForExport', () => {
 
     const result = serializeDiaryEntriesForExport(entries);
     expect(JSON.parse(result)).toEqual(entries);
+  });
+});
+
+describe('serializeDiaryEntriesForExport (添付画像を含むバックアップ)', () => {
+  const entries: DiaryEntry[] = [
+    {
+      id: '1',
+      text: '写真つき',
+      createdAt: '2026-04-01T00:00:00.000Z',
+      images: [{ fileName: 'a.jpg' }],
+    },
+  ];
+
+  it('embeds image data in an object-format backup when images are provided (正常系)', () => {
+    const result = JSON.parse(
+      serializeDiaryEntriesForExport(entries, new Map([['a.jpg', 'QUJD']])),
+    );
+
+    expect(result).toEqual({
+      format: DIARY_BACKUP_FORMAT,
+      version: DIARY_BACKUP_VERSION,
+      entries,
+      images: { 'a.jpg': 'QUJD' },
+    });
+  });
+
+  it('keeps the legacy array format when there are no images to embed (後方互換: 画像なし)', () => {
+    expect(JSON.parse(serializeDiaryEntriesForExport(entries, new Map()))).toEqual(entries);
+    expect(JSON.parse(serializeDiaryEntriesForExport(entries))).toEqual(entries);
   });
 });

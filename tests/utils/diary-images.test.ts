@@ -12,6 +12,8 @@ import {
   isSameDiaryImageDrafts,
   listStoredDiaryImageFileNames,
   pickDiaryImageAsync,
+  readDiaryImagesAsBase64,
+  restoreDiaryImagesFromBase64,
   saveDiaryImage,
   toDiaryImageDrafts,
 } from '@/utils/diary-images';
@@ -20,6 +22,8 @@ import {
 jest.mock('expo-file-system', () => {
   const existing = new Set<string>();
   const failingCopySources = new Set<string>();
+  const contents = new Map<string, string>();
+  const failingWrites = new Set<string>();
   function join(parts: (string | { uri: string })[]) {
     return parts.map((part) => (typeof part === 'string' ? part : part.uri)).join('/');
   }
@@ -42,6 +46,20 @@ jest.mock('expo-file-system', () => {
     }
     delete() {
       existing.delete(this.uri);
+    }
+    async base64() {
+      if (!existing.has(this.uri)) {
+        throw new Error('not found');
+      }
+      return contents.get(this.uri) ?? '';
+    }
+    write(content: string, options?: { encoding?: string }) {
+      if (failingWrites.has(this.uri)) {
+        throw new Error('write failed');
+      }
+      expect(options).toEqual({ encoding: 'base64' });
+      existing.add(this.uri);
+      contents.set(this.uri, content);
     }
   }
   class MockDirectory {
@@ -74,6 +92,8 @@ jest.mock('expo-file-system', () => {
     Paths: { document: { uri: 'file:///documents' } },
     __existing: existing,
     __failingCopySources: failingCopySources,
+    __contents: contents,
+    __failingWrites: failingWrites,
   };
 });
 
@@ -91,6 +111,8 @@ jest.mock('expo-crypto', () => {
 const mockedFileSystem = require('expo-file-system') as {
   __existing: Set<string>;
   __failingCopySources: Set<string>;
+  __contents: Map<string, string>;
+  __failingWrites: Set<string>;
 };
 const mockedImagePicker = ImagePicker as jest.Mocked<typeof ImagePicker>;
 
@@ -100,6 +122,8 @@ const originalOS = Platform.OS;
 beforeEach(() => {
   mockedFileSystem.__existing.clear();
   mockedFileSystem.__failingCopySources.clear();
+  mockedFileSystem.__contents.clear();
+  mockedFileSystem.__failingWrites.clear();
   jest.clearAllMocks();
 });
 
@@ -251,5 +275,81 @@ describe('listStoredDiaryImageFileNames', () => {
 
   it('returns an empty list before any image has been saved (境界値: ディレクトリ未作成)', () => {
     expect(listStoredDiaryImageFileNames()).toEqual([]);
+  });
+});
+
+describe('readDiaryImagesAsBase64', () => {
+  it('reads each referenced image once as Base64 (正常系)', async () => {
+    mockedFileSystem.__existing.add(`${IMAGES_DIR}/a.jpg`);
+    mockedFileSystem.__contents.set(`${IMAGES_DIR}/a.jpg`, 'QUJD');
+
+    const result = await readDiaryImagesAsBase64([
+      { images: [{ fileName: 'a.jpg' }] },
+      { images: [{ fileName: 'a.jpg' }] },
+      {},
+    ]);
+
+    expect([...result]).toEqual([['a.jpg', 'QUJD']]);
+  });
+
+  it('skips images whose file is missing without failing (異常系: ファイル欠落)', async () => {
+    mockedFileSystem.__existing.add(`${IMAGES_DIR}/a.jpg`);
+    mockedFileSystem.__contents.set(`${IMAGES_DIR}/a.jpg`, 'QUJD');
+
+    const result = await readDiaryImagesAsBase64([
+      { images: [{ fileName: 'a.jpg' }, { fileName: 'missing.jpg' }] },
+    ]);
+
+    expect([...result.keys()]).toEqual(['a.jpg']);
+  });
+
+  it('returns nothing on web, where image attachment is not supported (Web)', async () => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, get: () => 'web' });
+    mockedFileSystem.__existing.add(`${IMAGES_DIR}/a.jpg`);
+
+    expect((await readDiaryImagesAsBase64([{ images: [{ fileName: 'a.jpg' }] }])).size).toBe(0);
+  });
+});
+
+describe('restoreDiaryImagesFromBase64', () => {
+  it('writes each image into the image directory, creating the directory if needed (正常系)', () => {
+    const failed = restoreDiaryImagesFromBase64(new Map([['a.jpg', 'QUJD']]));
+
+    expect(failed).toBe(0);
+    expect(mockedFileSystem.__contents.get(`${IMAGES_DIR}/a.jpg`)).toBe('QUJD');
+    expect(mockedFileSystem.__existing.has(IMAGES_DIR)).toBe(true);
+  });
+
+  it('overwrites an image that already exists with the same name (境界値: 同名上書き)', () => {
+    mockedFileSystem.__existing.add(`${IMAGES_DIR}/a.jpg`);
+    mockedFileSystem.__contents.set(`${IMAGES_DIR}/a.jpg`, 'OLD=');
+
+    restoreDiaryImagesFromBase64(new Map([['a.jpg', 'QUJD']]));
+
+    expect(mockedFileSystem.__contents.get(`${IMAGES_DIR}/a.jpg`)).toBe('QUJD');
+  });
+
+  it('counts images that failed to write and still restores the rest (異常系: 書き込み失敗)', () => {
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    mockedFileSystem.__failingWrites.add(`${IMAGES_DIR}/a.jpg`);
+
+    const failed = restoreDiaryImagesFromBase64(
+      new Map([
+        ['a.jpg', 'QUJD'],
+        ['b.jpg', 'QUJD'],
+      ]),
+    );
+
+    expect(failed).toBe(1);
+    expect(mockedFileSystem.__contents.has(`${IMAGES_DIR}/b.jpg`)).toBe(true);
+  });
+
+  it('does nothing for an empty map or on web (境界値/Web)', () => {
+    expect(restoreDiaryImagesFromBase64(new Map())).toBe(0);
+    expect(mockedFileSystem.__existing.has(IMAGES_DIR)).toBe(false);
+
+    Object.defineProperty(Platform, 'OS', { configurable: true, get: () => 'web' });
+    expect(restoreDiaryImagesFromBase64(new Map([['a.jpg', 'QUJD']]))).toBe(0);
+    expect(mockedFileSystem.__contents.size).toBe(0);
   });
 });

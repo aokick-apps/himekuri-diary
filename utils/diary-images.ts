@@ -171,3 +171,55 @@ export function listStoredDiaryImageFileNames(): string[] {
     .filter((item): item is File => item instanceof File)
     .map((file) => file.name);
 }
+
+/**
+ * バックアップに埋め込むため、日記が参照する添付画像の本体をBase64で読み出す(ファイル名 -> Base64)。
+ * 読み出せない画像は日記本体のバックアップを妨げないよう警告だけ残して除外する。Webは画像を扱わないため空。
+ */
+export async function readDiaryImagesAsBase64(
+  entries: readonly { images?: readonly DiaryImage[] }[],
+): Promise<Map<string, string>> {
+  const result = new Map<string, string>();
+  if (!isDiaryImageAttachmentSupported()) {
+    return result;
+  }
+  const fileNames = new Set(
+    entries.flatMap((entry) => (entry.images ?? []).map((i) => i.fileName)),
+  );
+  // 巨大な画像を同時に複数読み込んでメモリを圧迫しないよう、1枚ずつ読む
+  for (const fileName of fileNames) {
+    try {
+      const file = getDiaryImageFile({ fileName });
+      if (file.exists) {
+        result.set(fileName, await file.base64());
+      }
+    } catch (error) {
+      console.warn('readDiaryImagesAsBase64: 添付画像を読み出せませんでした', error);
+    }
+  }
+  return result;
+}
+
+/**
+ * バックアップから取り出した画像本体を添付画像ディレクトリへ書き戻し、書き戻せなかった枚数を返す。
+ * 同名の画像が既にある場合は上書きする。Webは画像を扱わないため何もしない。
+ */
+export function restoreDiaryImagesFromBase64(images: ReadonlyMap<string, string>): number {
+  if (!isDiaryImageAttachmentSupported() || images.size === 0) {
+    return 0;
+  }
+  let failedCount = 0;
+  const directory = getDiaryImagesDirectory();
+  if (!directory.exists) {
+    directory.create({ intermediates: true, idempotent: true });
+  }
+  for (const [fileName, base64] of images) {
+    try {
+      getDiaryImageFile({ fileName }).write(base64, { encoding: 'base64' });
+    } catch (error) {
+      failedCount += 1;
+      console.warn('restoreDiaryImagesFromBase64: 添付画像を書き戻せませんでした', error);
+    }
+  }
+  return failedCount;
+}

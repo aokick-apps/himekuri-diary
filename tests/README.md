@@ -9,7 +9,7 @@ tests/
   app/
     _layout.test.tsx      app/_layout.tsx（アプリ全体のレイアウト・オンボーディング表示制御）のテスト
     index.test.tsx      app/(tabs)/index.tsx（日記画面）のテスト
-    settings/            app/(tabs)/settings.tsx（設定画面）のテスト。機能単位で分割（screen / delete-all / export / import / appearance / calendar-layout / reminder* / app-lock）
+    settings/            app/(tabs)/settings.tsx（設定画面）のテスト。機能単位で分割（screen / delete-all / export / import / appearance / calendar-layout / reminder* / backup-images / app-lock）
     oss-licenses.test.tsx など   app/oss-licenses.tsx（OSSライセンス画面）のテスト
     day-entries/
       [date].test.tsx   app/day-entries/[date].tsx（日付ごとの日記一覧画面）のテスト

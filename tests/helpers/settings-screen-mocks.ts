@@ -14,10 +14,12 @@ export function createReminderNotificationsMock() {
   };
 }
 
-// 全件削除時の添付画像の削除はネイティブのファイルシステムに依存するため、呼び出しを無効化する
+// 添付画像の削除・バックアップへの出し入れはネイティブのファイルシステムに依存するため、呼び出しを無効化する
 export function createDiaryImagesMock() {
   return {
     deleteAllDiaryImages: jest.fn(),
+    readDiaryImagesAsBase64: jest.fn(() => Promise.resolve(new Map<string, string>())),
+    restoreDiaryImagesFromBase64: jest.fn(() => 0),
   };
 }
 

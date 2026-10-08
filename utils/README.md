@@ -15,7 +15,7 @@ utils/
   diary-file-transfer.ts          エクスポート/インポート時のファイル入出力(Webのダウンロード、選択ファイルの読み込み)
   diary-import.ts                 JSONファイルから日記データをインポートするためのパース・検証
   diary-reminder-notifications.ts 日記リマインダー(毎日決まった時刻のローカル通知)の許可状態取得・スケジュール
-  diary-images.ts                 日記の添付画像の選択・アプリ専用ディレクトリへの保存・削除
+  diary-images.ts                 日記の添付画像の選択・アプリ専用ディレクトリへの保存・削除、バックアップ用のBase64での読み出し/書き戻し
   diary-image-cleanup.ts          どの日記からも参照されていない添付画像の起動時の掃除
   diary-search.ts                 日記本文の検索(表記ゆれの正規化・一致判定・検索結果の抜粋作成)
   diary-storage.ts                日記データ(DiaryEntry型)のAsyncStorageキー定義、暗号化した保存・取得・削除
@@ -84,7 +84,7 @@ utils/
 日記データをJSON形式でエクスポートするための純粋関数群です。ファイルの書き出し・共有シート表示のI/Oは[`app/(tabs)/settings.tsx`](<../app/(tabs)/settings.tsx>)側で行い、このファイルは外部I/Oを持たないためユニットテストしやすくしています。
 
 - `buildDiaryExportFileName(date?)`: エクスポート先のファイル名(`diary-export-YYYYMMDD-HHmmss.json`)を生成します。複数回エクスポートしても上書きされないよう、日時(秒単位)を含めています。
-- `serializeDiaryEntriesForExport(entries)`: 日記データ一覧をインデント付きのJSON文字列に変換します。復号済みの平文をそのまま書き出すため、書き出し先ファイルは暗号化されません。
+- `serializeDiaryEntriesForExport(entries, images?)`: 日記データ一覧をインデント付きのJSON文字列に変換します。復号済みの平文をそのまま書き出すため、書き出し先ファイルは暗号化されません。添付画像(ファイル名 -> Base64)を渡すと、`{ format: 'diary-backup', version: 2, entries, images }`のオブジェクト形式で画像本体を埋め込みます(画像は元より約1.33倍のサイズになります)。画像が無い場合は従来どおり日記の配列だけを書き出します。
 
 ## `diary-file-transfer.ts` の構成
 
@@ -99,7 +99,7 @@ utils/
 
 JSONファイルから日記データをインポート(再取り込み)するための、パース・検証ロジックです。ファイル選択・確認ダイアログのI/Oは[`app/(tabs)/settings.tsx`](<../app/(tabs)/settings.tsx>)側で行い、このファイルは外部I/Oを持ちません(`diary-export.ts`と同方針)。
 
-- `parseDiaryEntriesForImport(content)`: JSON文字列を`DiaryEntry[]`としてパース・検証し、`{ validEntries, invalidCount }`(`DiaryImportParseResult`)を返します。JSONとして不正な場合、およびトップレベルが配列でない場合は例外を投げます。`DiaryEntry`の形を満たさない要素や、本文が`BODY_MAX_LENGTH`を超える要素は、1件の不整合でファイル全体が失敗しないようその要素だけを除外し、`invalidCount`に数えます。
+- `parseDiaryEntriesForImport(content)`: JSON文字列を`DiaryEntry[]`としてパース・検証し、`{ validEntries, invalidCount, images }`(`DiaryImportParseResult`)を返します。トップレベルは日記の配列(旧形式)か、画像本体を含むオブジェクト形式(`format`・`version`で判別)を受け付け、旧形式では`images`は空になります。JSONとして不正な場合、およびどちらの形式でもない場合・未対応のバージョンの場合は例外を投げます。`images`は取り込む日記が参照するものに限り、ファイル名が添付画像ディレクトリの外を指せない(パス区切り等を含まない)こととBase64として妥当なことを満たすものだけを返します。`DiaryEntry`の形を満たさない要素や、本文が`BODY_MAX_LENGTH`を超える要素は、1件の不整合でファイル全体が失敗しないようその要素だけを除外し、`invalidCount`に数えます。
 
 ## `diary-reminder-notifications.ts` の構成
 

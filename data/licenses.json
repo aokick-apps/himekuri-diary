@@ -1217,7 +1217,7 @@
   },
   {
     "name": "@xmldom/xmldom",
-    "version": "0.9.12",
+    "version": "0.8.15",
     "license": "MIT",
     "repository": "https://github.com/xmldom/xmldom"
   },

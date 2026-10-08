@@ -1217,7 +1217,7 @@ export default function HomeScreen() {
                   </Pressable>
                 </View>
                 <ThemedText style={[styles.monthPickerHint, { color: iconColor }]}>
-                  薄く表示されている月は日記が無い期間のため選択できません
+                  薄く表示されている月は選択できません
                 </ThemedText>
                 {/* maxHeightに収まらない画面でも全ての月に到達できるようスクロール可能にする */}
                 <ScrollView

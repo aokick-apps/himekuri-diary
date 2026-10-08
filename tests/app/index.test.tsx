@@ -2703,9 +2703,7 @@ describe('HomeScreen', () => {
 
       await openMonthPicker(now);
 
-      expect(
-        screen.getByText('薄く表示されている月は日記が無い期間のため選択できません'),
-      ).toBeTruthy();
+      expect(screen.getByText('薄く表示されている月は選択できません')).toBeTruthy();
     });
 
     it('adds the same bottom padding as the modal content to the month grid contentContainerStyle, so the last row is not hidden behind the tab bar when scrolled to the end (境界値: スクロール終端)', async () => {

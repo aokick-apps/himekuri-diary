@@ -3,7 +3,10 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-
 import { StrictMode, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, Pressable } from 'react-native';
 
-import { DiaryEntryComposerModal } from '@/components/diary-entry-composer-modal';
+import {
+  COMPOSER_INPUT_ACCESSORY_ID,
+  DiaryEntryComposerModal,
+} from '@/components/diary-entry-composer-modal';
 import { type SaveDiaryEntryOptions, useSaveDiaryEntry } from '@/hooks/use-save-diary-entry';
 import { loadDraftText, saveDraftText } from '@/utils/diary-draft-storage';
 
@@ -441,5 +444,15 @@ describe('DiaryEntryComposerModal', () => {
       );
       expect(defaultProps.onClose).not.toHaveBeenCalled();
     });
+  });
+
+  it('links the body input to the keyboard accessory that offers a "完了" button to close the keyboard (正常系)', async () => {
+    render(<DiaryEntryComposerModal {...defaultProps} />);
+    await waitFor(() => expect(loadDraftTextMock).toHaveBeenCalled());
+
+    expect(screen.getByLabelText('日記本文').props.inputAccessoryViewID).toBe(
+      COMPOSER_INPUT_ACCESSORY_ID,
+    );
+    expect(screen.getByRole('button', { name: 'キーボードを閉じる' })).toBeTruthy();
   });
 });

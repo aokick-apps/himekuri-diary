@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 
 import { DiaryImageAttachmentField } from '@/components/diary-image-attachment-field';
+import { KeyboardDoneAccessory } from '@/components/keyboard-done-accessory';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useDraftAutoSave } from '@/hooks/use-draft-auto-save';
@@ -30,6 +31,7 @@ import {
 import type { DiaryImage } from '@/utils/diary-storage';
 import { BODY_MAX_LENGTH, splitIntoGraphemes, truncateToBodyMaxLength } from '@/utils/diary-text';
 
+export const COMPOSER_INPUT_ACCESSORY_ID = 'diary-entry-composer-body-accessory';
 const MODAL_MAX_HEIGHT_RATIO = 0.7;
 const INPUT_MIN_HEIGHT = 80;
 const INPUT_MAX_HEIGHT_RATIO = 0.35;
@@ -256,6 +258,7 @@ export function DiaryEntryComposerModal({
                   }
                   multiline
                   scrollEnabled
+                  inputAccessoryViewID={COMPOSER_INPUT_ACCESSORY_ID}
                   accessibilityLabel="日記本文"
                   accessibilityHint={
                     isInputScrollable ? '長文は入力欄内でスクロールできます' : undefined
@@ -317,6 +320,7 @@ export function DiaryEntryComposerModal({
           </Animated.View>
         </Pressable>
       </KeyboardAvoidingView>
+      <KeyboardDoneAccessory nativeID={COMPOSER_INPUT_ACCESSORY_ID} />
     </Modal>
   );
 }

@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 
+import { DiaryImageAttachmentField } from '@/components/diary-image-attachment-field';
 import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { useDraftAutoSave } from '@/hooks/use-draft-auto-save';
@@ -21,6 +22,12 @@ import { useModalSlideTransition } from '@/hooks/use-modal-slide-transition';
 import { useSaveDiaryEntry } from '@/hooks/use-save-diary-entry';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { formatDateHeading } from '@/utils/diary-date';
+import {
+  commitDiaryImageDrafts,
+  deleteDiaryImages,
+  type DiaryImageDraft,
+} from '@/utils/diary-images';
+import type { DiaryImage } from '@/utils/diary-storage';
 import { BODY_MAX_LENGTH, splitIntoGraphemes, truncateToBodyMaxLength } from '@/utils/diary-text';
 
 const MODAL_MAX_HEIGHT_RATIO = 0.7;
@@ -35,8 +42,8 @@ export type DiaryEntryComposerModalProps = {
   draftStorageKeyPrefix: string;
   /** モーダルコンテンツ下端のpaddingBottom。タブバーの有無など呼び出し画面によって必要な余白が異なる */
   contentBottomPadding: number;
-  /** 保存本体。trim済みの本文を受け取り、DiaryEntryの組み立てと永続化・状態更新を呼び出し側で行う */
-  persist: (trimmedText: string) => Promise<void>;
+  /** 保存本体。trim済みの本文と確定済みの添付画像を受け取り、DiaryEntryの組み立てと永続化・状態更新を呼び出し側で行う */
+  persist: (trimmedText: string, images: DiaryImage[]) => Promise<void>;
   /** 保存成功時に呼ばれる(下書きの自動保存キーは本コンポーネント側で削除済み) */
   onSaved: () => void;
   /** 保存失敗時に呼ばれる(楽観的更新のロールバック等) */
@@ -57,6 +64,7 @@ export function DiaryEntryComposerModal({
   onClose,
 }: DiaryEntryComposerModalProps) {
   const [draft, setDraft] = useState('');
+  const [imageDrafts, setImageDrafts] = useState<DiaryImageDraft[]>([]);
   const [inputContentHeight, setInputContentHeight] = useState(0);
   const draftEditRevisionRef = useRef(0);
   // アンマウント後にstate更新を行わないようにするためのフラグ。保存処理の完了を待つ間に
@@ -92,6 +100,7 @@ export function DiaryEntryComposerModal({
       return;
     }
     setDraft('');
+    setImageDrafts([]);
     setInputContentHeight(0);
     setError(null);
   }, [draftKey, setError]);
@@ -102,6 +111,7 @@ export function DiaryEntryComposerModal({
       return;
     }
     setDraft('');
+    setImageDrafts([]);
     setInputContentHeight(0);
     setError(null);
   }, [isModalMounted, setError]);
@@ -123,7 +133,7 @@ export function DiaryEntryComposerModal({
   };
 
   const handleCancel = () => {
-    if (!draft.trim()) {
+    if (!draft.trim() && imageDrafts.length === 0) {
       // 復元前に消すと、まだ読み込んでいない保存済みの下書きまで失われる
       if (isDraftRestored) {
         void clearDraft();
@@ -148,7 +158,16 @@ export function DiaryEntryComposerModal({
   const handleSave = async () => {
     await save({
       text: draft,
-      persist,
+      persist: async (trimmed) => {
+        const { images, newlySaved } = commitDiaryImageDrafts(imageDrafts);
+        try {
+          await persist(trimmed, images);
+        } catch (err) {
+          // 日記が保存されなかった場合、今回コピーした画像はどこからも参照されないため消す
+          deleteDiaryImages(newlySaved);
+          throw err;
+        }
+      },
       onSuccess: async () => {
         // 保存成功時は自動保存済みの下書きキーも削除する。残したままだと次回同じ日付で
         // モーダルを開いた際に、既に保存済みの内容を誤って復元してしまう
@@ -247,6 +266,11 @@ export function DiaryEntryComposerModal({
                     入力欄内をスクロールできます
                   </ThemedText>
                 ) : null}
+                <DiaryImageAttachmentField
+                  drafts={imageDrafts}
+                  onChange={setImageDrafts}
+                  disabled={isSaving}
+                />
                 <View style={styles.composerFooter}>
                   <ThemedText
                     style={[

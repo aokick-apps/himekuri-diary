@@ -737,7 +737,7 @@
   },
   {
     "name": "@expo/xcpretty",
-    "version": "4.4.4",
+    "version": "4.4.5",
     "license": "BSD-3-Clause",
     "repository": "https://github.com/expo/expo-cli"
   },
@@ -1217,13 +1217,7 @@
   },
   {
     "name": "@xmldom/xmldom",
-    "version": "0.8.13",
-    "license": "MIT",
-    "repository": "https://github.com/xmldom/xmldom"
-  },
-  {
-    "name": "@xmldom/xmldom",
-    "version": "0.9.10",
+    "version": "0.9.12",
     "license": "MIT",
     "repository": "https://github.com/xmldom/xmldom"
   },
@@ -1481,19 +1475,19 @@
   },
   {
     "name": "brace-expansion",
-    "version": "1.1.18",
+    "version": "1.1.21",
     "license": "MIT",
     "repository": "https://github.com/juliangruber/brace-expansion"
   },
   {
     "name": "brace-expansion",
-    "version": "2.1.4",
+    "version": "2.1.7",
     "license": "MIT",
     "repository": "https://github.com/juliangruber/brace-expansion"
   },
   {
     "name": "brace-expansion",
-    "version": "5.0.9",
+    "version": "5.0.12",
     "license": "MIT",
     "repository": "https://github.com/juliangruber/brace-expansion"
   },
@@ -1708,7 +1702,7 @@
   },
   {
     "name": "compression",
-    "version": "1.8.1",
+    "version": "1.8.2",
     "license": "MIT",
     "repository": "expressjs/compression"
   },
@@ -1774,7 +1768,7 @@
   },
   {
     "name": "decode-uri-component",
-    "version": "0.2.2",
+    "version": "0.5.0",
     "license": "MIT",
     "repository": "SamVerschueren/decode-uri-component"
   },
@@ -2021,6 +2015,18 @@
   {
     "name": "expo-image",
     "version": "3.0.11",
+    "license": "MIT",
+    "repository": "https://github.com/expo/expo"
+  },
+  {
+    "name": "expo-image-loader",
+    "version": "6.0.0",
+    "license": "MIT",
+    "repository": "https://github.com/expo/expo"
+  },
+  {
+    "name": "expo-image-picker",
+    "version": "17.0.11",
     "license": "MIT",
     "repository": "https://github.com/expo/expo"
   },
@@ -2602,7 +2608,7 @@
   },
   {
     "name": "js-yaml",
-    "version": "5.2.3",
+    "version": "5.4.2",
     "license": "MIT",
     "repository": "nodeca/js-yaml"
   },
@@ -3626,7 +3632,7 @@
   },
   {
     "name": "shell-quote",
-    "version": "1.10.0",
+    "version": "1.12.0",
     "license": "MIT",
     "repository": "http://github.com/ljharb/shell-quote"
   },
@@ -3680,7 +3686,7 @@
   },
   {
     "name": "source-map-js",
-    "version": "1.2.1",
+    "version": "1.2.2",
     "license": "BSD-3-Clause",
     "repository": "7rulnik/source-map-js"
   },
@@ -3932,7 +3938,7 @@
   },
   {
     "name": "undici",
-    "version": "6.28.0",
+    "version": "6.29.0",
     "license": "MIT",
     "repository": "https://github.com/nodejs/undici"
   },

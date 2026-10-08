@@ -5001,7 +5001,7 @@ describe('HomeScreen', () => {
       expect(queryCalendarDayButtonsWithEntry()).toHaveLength(1);
     });
 
-    it('navigates to the day-entries screen for the date of the tapped search result', async () => {
+    it('navigates to the day-entries screen for the date of the tapped search result, passing the entry id to highlight', async () => {
       const now = new Date();
       const { dayWithEntry } = pickTestDays(now);
       await AsyncStorage.setItem(
@@ -5019,7 +5019,9 @@ describe('HomeScreen', () => {
       const resultItem = await screen.findByText(/公園/);
       fireEvent.press(resultItem);
 
-      expect(mockPush).toHaveBeenCalledWith(`/day-entries/${toDateKeyForTest(now, dayWithEntry)}`);
+      expect(mockPush).toHaveBeenCalledWith(
+        `/day-entries/${toDateKeyForTest(now, dayWithEntry)}?highlightEntryId=1`,
+      );
     });
 
     it('sets accessibilityRole="button" and an accessibilityLabel combining the date heading and text on each search result item, so screen readers can identify it (アクセシビリティ)', async () => {

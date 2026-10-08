@@ -62,6 +62,7 @@ import {
   getAllDiaryEntries,
   saveDiaryEntry,
   type DiaryEntry,
+  type DiaryImage,
 } from '@/utils/diary-storage';
 
 // 週表示レイアウトの「今日」判定を再評価する間隔(ミリ秒)。タブ画面が保持され続けても
@@ -541,7 +542,7 @@ export default function HomeScreen() {
   // 日記の無い日をタップして開いたモーダルからの新規保存。createdAtの日付部分は選択日付に
   // 固定しつつ、時分秒は実際に保存した瞬間の時刻にする(buildCreatedAtForDateKeyAtTime)
   const handlePersistNewEntry = useCallback(
-    async (trimmed: string) => {
+    async (trimmed: string, images: DiaryImage[]) => {
       // 対象日付が無いまま成功扱いにしないよう、失敗として伝える
       if (!newEntryDate) {
         throw new Error('対象日付が未設定です');
@@ -550,6 +551,7 @@ export default function HomeScreen() {
         id: randomUUID(),
         text: trimmed,
         createdAt: buildCreatedAtForDateKeyAtTime(newEntryDate),
+        ...(images.length > 0 ? { images } : {}),
       };
       // 体感速度を落とさないよう、即座にReact stateを楽観的に更新する
       setEntries((current) => [newEntry, ...current]);
@@ -622,7 +624,10 @@ export default function HomeScreen() {
   // 検索結果の項目がタップされたら、そのエントリが書かれた日付の一覧画面へ遷移する
   const handleSearchResultPress = useCallback(
     (entry: DiaryEntry) => {
-      router.push(`/day-entries/${toDateKey(new Date(entry.createdAt))}`);
+      // 遷移先の一覧で、検索でヒットした日記を強調表示・自動スクロールできるようidも渡す
+      router.push(
+        `/day-entries/${toDateKey(new Date(entry.createdAt))}?highlightEntryId=${encodeURIComponent(entry.id)}`,
+      );
     },
     [router],
   );

@@ -73,6 +73,12 @@ jest.mock('expo-secure-store', () => {
 // 動くようモック化する。`navigation.addListener('beforeRemove', ...)`は実際の画面遷移(ヘッダーの
 // 戻る操作・Android物理戻るボタン・スワイプ戻るジェスチャー)のいずれでも発火する単一のイベントのため、
 // テスト側は登録されたコールバックを直接呼び出すことでこれらすべての操作を模擬できる。
+// 添付画像のファイル操作はネイティブのファイルシステムに依存するため、呼び出し内容だけを検証する
+jest.mock('@/utils/diary-images', () =>
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require('../../helpers/mock-diary-images'),
+);
+
 jest.mock('expo-router', () => {
   let idParam = 'entry-1';
   // router.back()が実際にnavigationのbeforeRemoveガードを経由する挙動を再現するため、
@@ -1716,6 +1722,111 @@ describe('EditEntryScreen', () => {
         process.off('unhandledRejection', onUnhandledRejection);
         consoleErrorSpy.mockRestore();
       }
+    });
+  });
+
+  describe('添付写真の編集', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mockedDiaryImages = require('../../helpers/mock-diary-images') as {
+      pickDiaryImageAsync: jest.Mock;
+      deleteDiaryImages: jest.Mock;
+    };
+    const ORIGINAL_IMAGES = [{ fileName: 'original.jpg' }];
+
+    async function renderWithPhoto() {
+      await seedDiaryEntry({
+        id: ENTRY_ID,
+        text: '写真付きの日記',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        images: ORIGINAL_IMAGES,
+      });
+      render(<EditEntryScreen />);
+      await screen.findByDisplayValue('写真付きの日記');
+      expect(screen.getByLabelText('添付した写真').props.source).toEqual({
+        uri: 'file:///documents/diary-images/original.jpg',
+      });
+    }
+
+    it('saves the replaced photo and deletes the file that is no longer referenced (正常系: 差し替え)', async () => {
+      await renderWithPhoto();
+      mockedDiaryImages.pickDiaryImageAsync.mockResolvedValue({
+        status: 'picked',
+        uri: 'file:///tmp/replaced.jpg',
+      });
+      await act(async () => {
+        fireEvent.press(screen.getByRole('button', { name: '添付した写真を差し替える' }));
+      });
+
+      await act(async () => {
+        fireEvent.press(screen.getByRole('button', { name: '保存' }));
+      });
+
+      await waitFor(async () =>
+        expect((await readPersistedEntry(ENTRY_ID))?.images).toEqual([
+          { fileName: 'saved-replaced.jpg' },
+        ]),
+      );
+      await waitFor(() =>
+        expect(mockedDiaryImages.deleteDiaryImages).toHaveBeenCalledWith(ORIGINAL_IMAGES),
+      );
+    });
+
+    it('saves the entry without images and deletes the removed photo file (正常系: 削除)', async () => {
+      await renderWithPhoto();
+      fireEvent.press(screen.getByRole('button', { name: '添付した写真を削除する' }));
+
+      await act(async () => {
+        fireEvent.press(screen.getByRole('button', { name: '保存' }));
+      });
+
+      await waitFor(async () => {
+        const persisted = await readPersistedEntry(ENTRY_ID);
+        expect(persisted?.text).toBe('写真付きの日記');
+        expect(persisted).not.toHaveProperty('images');
+      });
+      await waitFor(() =>
+        expect(mockedDiaryImages.deleteDiaryImages).toHaveBeenCalledWith(ORIGINAL_IMAGES),
+      );
+    });
+
+    it('keeps the original photo file when saving fails (異常系: 保存失敗)', async () => {
+      await renderWithPhoto();
+      fireEvent.press(screen.getByRole('button', { name: '添付した写真を削除する' }));
+      jest.spyOn(AsyncStorage, 'setItem').mockRejectedValueOnce(new Error('write failed'));
+
+      await act(async () => {
+        fireEvent.press(screen.getByRole('button', { name: '保存' }));
+      });
+
+      expect(await screen.findByText('更新に失敗しました。もう一度お試しください。')).toBeTruthy();
+      expect(mockedDiaryImages.deleteDiaryImages).not.toHaveBeenCalledWith(ORIGINAL_IMAGES);
+    });
+
+    it('asks for confirmation before leaving when only the photo was changed (境界値: 本文は未変更)', async () => {
+      jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+      await renderWithPhoto();
+      fireEvent.press(screen.getByRole('button', { name: '添付した写真を削除する' }));
+
+      const preventDefault = jest.fn();
+      getBeforeRemoveListener()(buildBeforeRemoveEvent(preventDefault));
+
+      expect(preventDefault).toHaveBeenCalledTimes(1);
+      expect(Alert.alert).toHaveBeenCalledWith(
+        '変更を破棄しますか?',
+        '編集中の内容は保存されません。',
+        expect.any(Array),
+      );
+    });
+
+    it('lets the user leave without confirmation when neither text nor photo changed (境界値: 変更なし)', async () => {
+      jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+      await renderWithPhoto();
+
+      const preventDefault = jest.fn();
+      getBeforeRemoveListener()(buildBeforeRemoveEvent(preventDefault));
+
+      expect(preventDefault).not.toHaveBeenCalled();
+      expect(Alert.alert).not.toHaveBeenCalled();
     });
   });
 });

@@ -7,6 +7,9 @@
 ```
 components/
   app-lock-screen.tsx             アプリロック中に表示するロック画面(生体認証/パスコードでの解除)
+  day-entry-item.tsx              日別一覧画面の日記1件分(本文・添付写真・コピー/編集/削除、検索から来た日記の強調表示)
+  diary-image-attachment-field.tsx 日記の入力画面で写真を添付・差し替え・削除する欄
+  diary-image-preview.tsx         日記の添付写真のプレビューと、タップでの全画面表示
   diary-entry-composer-modal.tsx  対象日付の日記を新規登録する入力モーダル(アニメーション・下書き自動保存つき)
   external-link.tsx               外部URLを開くリンクコンポーネント
   haptic-tab.tsx                  タップ時に触覚フィードバックを伴うタブボタン

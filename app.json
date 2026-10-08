@@ -45,6 +45,14 @@
         {
           "faceIDPermission": "日記アプリのロック解除にFace IDを使用します。"
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "日記に添付する写真を選ぶために、写真ライブラリへのアクセスを使用します。",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
       ]
     ],
     "experiments": {

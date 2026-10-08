@@ -148,7 +148,8 @@
 | [expo-haptics](https://docs.expo.dev/versions/v54.0.0/sdk/haptics/) | 触覚フィードバック（タップ時の振動） | `components/haptic-tab.tsx`、`app/(tabs)/index.tsx`、`app/day-entries/[date].tsx`、`app/edit-entry/[id].tsx` |
 | [expo-clipboard](https://docs.expo.dev/versions/v54.0.0/sdk/clipboard/) | 日記本文のクリップボードへのコピー | `app/day-entries/[date].tsx` |
 | [expo-document-picker](https://docs.expo.dev/versions/v54.0.0/sdk/document-picker/) | インポートする日記バックアップファイルの選択 | `app/(tabs)/settings.tsx` |
-| [expo-file-system](https://docs.expo.dev/versions/v54.0.0/sdk/filesystem/) | エクスポート用ファイルの書き出し・インポートファイルの読み込み | `app/(tabs)/settings.tsx` |
+| [expo-file-system](https://docs.expo.dev/versions/v54.0.0/sdk/filesystem/) | エクスポート用ファイルの書き出し・インポートファイルの読み込み、日記の添付画像の保存・削除 | `app/(tabs)/settings.tsx`、`utils/diary-images.ts` |
+| [expo-image-picker](https://docs.expo.dev/versions/v54.0.0/sdk/imagepicker/) | 日記に添付する写真のフォトライブラリからの選択 | `utils/diary-images.ts` |
 | [expo-sharing](https://docs.expo.dev/versions/v54.0.0/sdk/sharing/) | エクスポートした日記ファイルの共有シート表示 | `app/(tabs)/settings.tsx` |
 | [expo-local-authentication](https://docs.expo.dev/versions/v54.0.0/sdk/local-authentication/) | アプリロック解除時の生体認証・端末認証 | `utils/app-lock-authentication.ts` |
 | [expo-notifications](https://docs.expo.dev/versions/v54.0.0/sdk/notifications/) | 日記リマインダーのローカル通知のスケジュール | `utils/diary-reminder-notifications.ts` |

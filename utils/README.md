@@ -13,6 +13,7 @@ utils/
   diary-export.ts                 日記データをJSONとしてエクスポートするためのファイル名生成・シリアライズ
   diary-import.ts                 JSONファイルから日記データをインポートするためのパース・検証
   diary-reminder-notifications.ts 日記リマインダー(毎日決まった時刻のローカル通知)の許可状態取得・スケジュール
+  diary-images.ts                 日記の添付画像の選択・アプリ専用ディレクトリへの保存・削除
   diary-search.ts                 日記本文の検索(表記ゆれの正規化・一致判定・検索結果の抜粋作成)
   diary-storage.ts                日記データ(DiaryEntry型)のAsyncStorageキー定義、暗号化した保存・取得・削除
   diary-text.ts                   日記本文の文字数上限と、書記素クラスタ単位での切り詰め
@@ -102,7 +103,8 @@ JSONファイルから日記データをインポート(再取り込み)する�
 
 日記データ(`DiaryEntry`)のAsyncStorageへの保存・取得・削除と、そのキー定義をまとめたユーティリティです。ホーム画面・日別一覧画面・編集画面・設定画面(全件削除・エクスポート・インポート)で共有します。エントリ1件ごとに個別のAsyncStorageキー(`diary-entry:<id>`)へ暗号化して保存する方式を採用しており、1件の保存/削除の書き込みコストがエントリ総数に依存しない(O(1))ようにしています。
 
-- `DiaryEntry`: 日記1件分のデータ構造の型(`id` / `text` / `createdAt`)です。一覧表示・エクスポート・インポートで共有します。
+- `DiaryEntry`: 日記1件分のデータ構造の型(`id` / `text` / `createdAt`、任意で添付画像の参照`images`)です。一覧表示・エクスポート・インポートで共有します。`images`を持たない古いデータ・バックアップもそのまま読み込めます。
+- `DiaryImage` / `isDiaryImage(value)` / `MAX_DIARY_IMAGES_PER_ENTRY`: 添付画像の参照(アプリ専用ディレクトリ内のファイル名のみ)と、その検証(ディレクトリ外を指す名前は拒否)、1件あたりの上限枚数(現在は1枚)です。
 - `isDiaryEntry(value)`: 値が`DiaryEntry`として妥当な形かを判定する型ガードです。AsyncStorageから読み込んだJSONは実行時に型が保証されないため、`as`で決め打ちせずここで検証します。[`diary-import.ts`](diary-import.ts)のインポート時の検証でも再利用します。
 - `DIARY_ENTRIES_STORAGE_KEY`: 旧方式(全件を1つの配列としてまとめて保存する単一キー)のAsyncStorageキーの定数。現在は移行(マイグレーション)元としてのみ参照されます。
 - `DIARY_ENTRY_KEY_PREFIX` / `buildDiaryEntryKey(id)`: エントリ単位の個別キー(`diary-entry:<id>`)のプレフィックスと、idからキー文字列を組み立てる関数です。
@@ -112,6 +114,18 @@ JSONファイルから日記データをインポート(再取り込み)する�
 - `clearAllDiaryEntries()`: 日記データ(個別キー方式のエントリ、未保存の下書き(`diary-draft-storage.ts`の`isDraftStorageKey`に該当するキー)、および念のためレガシーキー)のみをAsyncStorageから削除します。暗号鍵(`expo-secure-store`側)など日記データ以外のキーには影響しません。ストアのデータ削除要件(Google Play/Apple双方でユーザーによるデータ削除手段の提供が求められる)に対応するため、[`app/(tabs)/settings.tsx`](<../app/(tabs)/settings.tsx>)の確認ダイアログ付きボタンから呼び出されます。
 
 利用箇所は[`app/(tabs)/index.tsx`](<../app/(tabs)/index.tsx>)(保存・全件取得)、[`app/day-entries/[date].tsx`](<../app/day-entries/[date].tsx>)(全件取得・保存・削除)、[`app/edit-entry/[id].tsx`](<../app/edit-entry/[id].tsx>)(1件取得・保存)、[`app/(tabs)/settings.tsx`](<../app/(tabs)/settings.tsx>)(全件取得・保存・全件削除)です。`DiaryEntry`型・`isDiaryEntry`は[`diary-export.ts`](diary-export.ts)・[`diary-import.ts`](diary-import.ts)からも参照されます。
+
+## `diary-images.ts` の構成
+
+日記の添付画像のファイル操作をまとめたものです。画像本体はアプリ専用ディレクトリ(`Paths.document/diary-images/`)に置き、日記データにはファイル名だけを保存します。Webは`expo-file-system`のファイルシステムAPIに対応していないため、`isDiaryImageAttachmentSupported()`がfalseになり、添付の操作自体を表示しません。
+
+- `pickDiaryImageAsync()`: フォトライブラリから画像を1枚選ばせます。写真へのアクセスが許可されていない場合は、例外ではなく`{ status: 'denied' }`を返します。
+- `saveDiaryImage(uri)` / `getDiaryImageFile(image)`: 選んだ画像をアプリ専用ディレクトリへコピーし、参照を返します。表示には`getDiaryImageFile(image).uri`を使います。
+- `DiaryImageDraft` / `toDiaryImageDrafts` / `commitDiaryImageDrafts`: 入力画面で編集中の添付画像です。選んだ時点ではコピーせず、保存時に`commitDiaryImageDrafts`で初めてコピーします(保存せずに閉じた場合に、参照されないファイルを残さないため)。コピーの途中で失敗した場合は、それまでにコピーした分を削除します。
+- `getRemovedDiaryImages(before, after)` / `isSameDiaryImageDrafts(a, b)`: 保存によって参照されなくなった画像の抽出と、未保存の変更があるかの判定です。
+- `deleteDiaryImages(images)` / `deleteAllDiaryImages()`: 添付画像のファイルを削除します。日記本体の操作を妨げないよう、失敗しても例外は投げずに警告だけ残します。日記を削除したときは、取り消し期限が過ぎた時点で消します。全件削除では、`clearAllDiaryEntries`がディレクトリごと消します。
+
+添付画像のファイル自体は日記本文のように暗号化していません(OSのアプリごとのサンドボックスで保護されます)。また、エクスポートしたバックアップに含まれるのは参照だけで、画像本体は含まれません。
 
 ## `diary-text.ts` の構成
 

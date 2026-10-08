@@ -21,6 +21,11 @@ jest.mock('@/utils/diary-draft-storage', () => ({
   saveDraftText: jest.fn(() => Promise.resolve()),
 }));
 
+jest.mock('@/utils/diary-images', () =>
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require('../helpers/mock-diary-images'),
+);
+
 jest.mock('@/hooks/use-save-diary-entry', () => ({
   useSaveDiaryEntry: jest.fn(),
 }));
@@ -30,6 +35,11 @@ const saveDraftTextMock = jest.mocked(saveDraftText);
 const useSaveDiaryEntryMock = jest.mocked(useSaveDiaryEntry);
 const saveEntryMock = jest.fn(async (_options: SaveDiaryEntryOptions) => {});
 const setErrorMock = jest.fn();
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const mockedDiaryImages = require('../helpers/mock-diary-images') as {
+  pickDiaryImageAsync: jest.Mock;
+  deleteDiaryImages: jest.Mock;
+};
 
 const defaultProps = {
   dateKey: '2026-09-19',
@@ -297,7 +307,7 @@ describe('DiaryEntryComposerModal', () => {
       await advance(0);
       await advance(DEBOUNCE_MS * 2);
 
-      expect(defaultProps.persist).toHaveBeenCalledWith('保存する本文');
+      expect(defaultProps.persist).toHaveBeenCalledWith('保存する本文', []);
       expect(defaultProps.onSaved).toHaveBeenCalledTimes(1);
       expect(removeItemSpy).toHaveBeenCalledWith(KEY_0919);
       expect(saveDraftTextMock).not.toHaveBeenCalled();
@@ -367,6 +377,69 @@ describe('DiaryEntryComposerModal', () => {
       expect(saveDraftTextMock).not.toHaveBeenCalled();
       expect(removeItemSpy).not.toHaveBeenCalled();
       expect(loadDraftTextMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('写真の添付', () => {
+    async function renderAndAttachPhoto() {
+      mockedDiaryImages.pickDiaryImageAsync.mockResolvedValue({
+        status: 'picked',
+        uri: 'file:///tmp/new.jpg',
+      });
+      render(<DiaryEntryComposerModal {...defaultProps} />);
+      await waitFor(() => expect(loadDraftTextMock).toHaveBeenCalled());
+      await act(async () => {
+        fireEvent.press(screen.getByRole('button', { name: '写真を添付' }));
+      });
+      expect(await screen.findByLabelText('添付した写真')).toBeTruthy();
+    }
+
+    it('saves the picked photo and passes its reference to persist together with the text (正常系)', async () => {
+      await renderAndAttachPhoto();
+      fireEvent.changeText(screen.getByLabelText('日記本文'), '写真付きの本文');
+
+      await act(async () => {
+        fireEvent.press(screen.getByRole('button', { name: '保存' }));
+      });
+      const [options] = saveEntryMock.mock.calls[0];
+      await act(async () => {
+        await options.persist('写真付きの本文');
+      });
+
+      expect(defaultProps.persist).toHaveBeenCalledWith('写真付きの本文', [
+        { fileName: 'saved-new.jpg' },
+      ]);
+      expect(mockedDiaryImages.deleteDiaryImages).not.toHaveBeenCalled();
+    });
+
+    it('deletes the copied photo and rethrows when persisting the entry fails (異常系: 孤児ファイルを残さない)', async () => {
+      await renderAndAttachPhoto();
+      fireEvent.changeText(screen.getByLabelText('日記本文'), '保存に失敗する本文');
+      defaultProps.persist.mockRejectedValueOnce(new Error('write failed'));
+
+      await act(async () => {
+        fireEvent.press(screen.getByRole('button', { name: '保存' }));
+      });
+      const [options] = saveEntryMock.mock.calls[0];
+
+      await expect(options.persist('保存に失敗する本文')).rejects.toThrow('write failed');
+      expect(mockedDiaryImages.deleteDiaryImages).toHaveBeenCalledWith([
+        { fileName: 'saved-new.jpg' },
+      ]);
+    });
+
+    it('asks for confirmation before closing when only a photo has been attached (境界値: 本文なし・写真のみ)', async () => {
+      jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+      await renderAndAttachPhoto();
+
+      fireEvent.press(screen.getByRole('button', { name: '閉じる' }));
+
+      expect(Alert.alert).toHaveBeenCalledWith(
+        '変更を破棄しますか?',
+        '入力中の内容は保存されません。',
+        expect.any(Array),
+      );
+      expect(defaultProps.onClose).not.toHaveBeenCalled();
     });
   });
 });

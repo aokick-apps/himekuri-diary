@@ -5,13 +5,21 @@ import * as SecureStore from 'expo-secure-store';
 import * as Sharing from 'expo-sharing';
 import type { PropsWithChildren } from 'react';
 import React from 'react';
-import { AccessibilityInfo, Alert, Platform, ScrollView, StyleSheet, Text } from 'react-native';
+import {
+  AccessibilityInfo,
+  ActivityIndicator,
+  Alert,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+} from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import SettingsScreen from '@/app/(tabs)/settings';
 import { TAB_SCREEN_CONTAINER_SAFE_AREA_TEST_ID } from '@/components/tab-screen-container';
 import { SETTINGS_SECTIONS } from '@/constants/settings-menu';
-import { Colors } from '@/constants/theme';
+import { Colors, Fonts } from '@/constants/theme';
 import { AppLockProvider } from '@/contexts/app-lock-context';
 import {
   CALENDAR_LAYOUT_PREFERENCE_STORAGE_KEY,
@@ -61,7 +69,7 @@ jest.mock('@/utils/app-lock-authentication', () => ({
 // `expo-file-system`(新API)はJest環境ではネイティブモジュールが存在せず、`Paths.cache`の参照時点で
 // 例外になるため、固定のURIを返す`Paths.cache`と書き込み内容を記録できる`File`のモックに差し替える。
 // `Paths.cache`を「取得できない」状態に上書きできるよう外側のクロージャ変数(`state`)に持たせ、
-// テストファイルと`app/(tabs)/settings.tsx`のどちらの`import`経由でも同じ実体を読み書きできるようにする。
+// テストファイルと設定画面の各部品(`components/settings/`・`utils/diary-file-transfer.ts`)のどちらの`import`経由でも同じ実体を読み書きできるようにする。
 jest.mock('expo-file-system', () => {
   const state: { cacheDirectoryUri: string | null } = { cacheDirectoryUri: 'file:///mock-cache/' };
   const write = jest.fn();
@@ -849,6 +857,36 @@ describe('日記データをエクスポートボタン(データ管理セクシ
     ).toEqual(expect.objectContaining({ disabled: false }));
   });
 
+  it('shows a spinner with "エクスポート中..." while exporting, keeping the button\'s accessible name and marking it busy (処理中の表示)', async () => {
+    jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    await AsyncStorage.setItem(DIARY_ENTRIES_STORAGE_KEY, sampleEntriesJson);
+    let resolveIsAvailable: (value: boolean) => void = () => {};
+    (Sharing.isAvailableAsync as jest.Mock).mockReturnValue(
+      new Promise<boolean>((resolve) => {
+        resolveIsAvailable = resolve;
+      }),
+    );
+    render(<SettingsScreen />);
+    expect(screen.queryByText('エクスポート中...')).toBeNull();
+
+    fireEvent.press(screen.getByText(EXPORT_BUTTON_LABEL));
+
+    const button = screen.getByRole('button', { name: EXPORT_BUTTON_LABEL });
+    expect(within(button).getByText('エクスポート中...')).toBeTruthy();
+    expect(within(button).UNSAFE_getAllByType(ActivityIndicator)).toHaveLength(1);
+    expect(button.props.accessibilityState).toEqual(expect.objectContaining({ busy: true }));
+
+    await act(async () => {
+      resolveIsAvailable(true);
+    });
+
+    await waitFor(() => expect(screen.queryByText('エクスポート中...')).toBeNull());
+    const buttonAfter = screen.getByRole('button', { name: EXPORT_BUTTON_LABEL });
+    expect(within(buttonAfter).getByText(EXPORT_BUTTON_LABEL)).toBeTruthy();
+    expect(within(buttonAfter).UNSAFE_queryAllByType(ActivityIndicator)).toHaveLength(0);
+    expect(buttonAfter.props.accessibilityState).toEqual(expect.objectContaining({ busy: false }));
+  });
+
   it('shows a failure alert when the cache directory is unavailable (境界値: Paths.cacheが取得できない場合)', async () => {
     jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     await AsyncStorage.setItem(DIARY_ENTRIES_STORAGE_KEY, sampleEntriesJson);
@@ -1486,6 +1524,43 @@ describe('日記データをインポートボタン(データ管理セクショ
       expect(AsyncStorage.setItem).not.toHaveBeenCalled();
     });
 
+    it('does not show the import progress while only the confirmation dialog is open (境界値: 保存開始前は進捗を出さない)', async () => {
+      await openConfirmDialog();
+
+      const button = screen.getByRole('button', { name: IMPORT_BUTTON_LABEL });
+      expect(within(button).getByText(IMPORT_BUTTON_LABEL)).toBeTruthy();
+      expect(screen.queryByText(/インポート中/)).toBeNull();
+      expect(button.props.accessibilityState).toEqual(expect.objectContaining({ busy: false }));
+    });
+
+    it('shows a spinner with the saved/total count while the confirmed import is saving, then restores the label (処理中の表示: 進捗件数)', async () => {
+      await openConfirmDialog();
+      let resolveSave: () => void = () => {};
+      jest.spyOn(AsyncStorage, 'setItem').mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveSave = resolve;
+          }),
+      );
+
+      await pressAlertButtonByLabel('取り込む');
+
+      const button = screen.getByRole('button', { name: IMPORT_BUTTON_LABEL });
+      expect(within(button).getByText('インポート中... (0/1件)')).toBeTruthy();
+      expect(within(button).UNSAFE_getAllByType(ActivityIndicator)).toHaveLength(1);
+      expect(button.props.accessibilityState).toEqual(expect.objectContaining({ busy: true }));
+      expect(button.props.accessibilityValue?.text).toBe('1件中0件を取り込み済み');
+
+      await act(async () => {
+        resolveSave();
+      });
+
+      await waitFor(() => expect(screen.queryByText(/インポート中/)).toBeNull());
+      const buttonAfter = screen.getByRole('button', { name: IMPORT_BUTTON_LABEL });
+      expect(within(buttonAfter).getByText(IMPORT_BUTTON_LABEL)).toBeTruthy();
+      expect(buttonAfter.props.accessibilityValue?.text).toBeUndefined();
+    });
+
     it('keeps the button disabled while the confirmed import is still saving, then restores it once finished (境界値: 取り込み中は無効のまま)', async () => {
       await openConfirmDialog();
       let resolveSave: () => void = () => {};
@@ -2027,6 +2102,15 @@ describe('リマインダーセクション(日記を書く習慣化のための
     });
 
     expect(screen.getByLabelText('時 00')).toBeTruthy();
+  });
+
+  it('renders the hour/minute values in the monospace font so the digit width stays stable while stepping (表示: 等幅フォント)', async () => {
+    renderSettingsScreen();
+
+    for (const label of ['時 21', '分 00']) {
+      const value = await screen.findByLabelText(label);
+      expect(StyleSheet.flatten(value.props.style).fontFamily).toBe(Fonts.mono);
+    }
   });
 
   it('exposes the changed stepper value as a polite live region on Android without using the iOS announcement API', async () => {

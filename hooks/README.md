@@ -13,6 +13,7 @@ hooks/
   use-save-diary-entry.ts        日記保存処理（バリデーション・保存中フラグ・エラーハンドリング）を共通化するフック
   use-draft-auto-save.ts         入力内容の変更をデバウンスして下書きとして自動保存し、破棄・保存成功時にキーを削除するフック
   use-draft-restore.ts           保存済みの下書きを復元し、復元完了フラグを返すフック
+  use-stepper-auto-repeat.ts     ステッパーの−/+ボタンの長押し中に一定間隔で値を増減し続けるフック
 ```
 
 ## 各フックの役割
@@ -23,6 +24,7 @@ hooks/
 - `use-modal-slide-transition.ts`: 背景オーバーレイのopacityフェードと、コンテンツのtranslateYスライドインを分離して制御するアニメーションフックです。`Modal` の `animationType` は `'none'` にし、返り値の `Animated.Value` を呼び出し側の `style` に適用します。退場アニメーションが完了するまで実際に描画するかどうか（`isMounted`）を別で管理しており、`isOpen` が `false` になった瞬間に消えてしまわないようになっています。[`components/diary-entry-composer-modal.tsx`](../components/diary-entry-composer-modal.tsx) の新規作成モーダルと、`app/(tabs)/index.tsx` の年月ピッカーモーダルから利用されています。
 - `use-save-diary-entry.ts`: 日記の保存処理に共通する「連打防止 → trim → 文字数上限検証 → 保存中フラグON → 永続化 → catchでエラーメッセージ設定 → finallyで保存中フラグOFF」という骨格を切り出したフックです。実際の永続化処理（`persist`）と、成功/失敗時の画面固有の副作用（楽観的更新・ロールバック・トースト表示・画面遷移等、`onSuccess`/`onError`）は呼び出し側からコールバックとして渡します。保存中かどうか（`isSaving`）とエラーメッセージ（`error`/`setError`）を返し、`app/(tabs)/index.tsx`（新規保存）、`app/edit-entry/[id].tsx`（編集保存）、[`components/diary-entry-composer-modal.tsx`](../components/diary-entry-composer-modal.tsx)（日付指定の新規作成モーダル本体）から利用されています。
 - `use-draft-auto-save.ts`: 入力内容（`draft`）の変更を1秒デバウンスして、AsyncStorageへ暗号化保存する共通フックです（空文字列の場合はキーを削除）。復元完了前に自動保存すると保存済みの下書きを上書きしてしまうため、復元完了フラグ（`isRestored`）が `true` になるまでは何もしません。返り値の `clearDraft` は、保留中の自動保存をキャンセルしてから下書きキーを削除します（保存成功時・破棄確定時に使います）。`app/(tabs)/index.tsx`（常設composer）、`app/edit-entry/[id].tsx`、[`components/diary-entry-composer-modal.tsx`](../components/diary-entry-composer-modal.tsx) から利用されています。
+- `use-stepper-auto-repeat.ts`: `Pressable`の`onLongPress`は単発でしか発火しないため、押し始めから500ms後に1回、その後は120msごとに`onChange`を呼び続けるオートリピートを実装したフックです。返り値の`onPressIn`/`onPressOut`/`onPress`をそのまま`Pressable`に渡します。長押しで1回以上発火した場合、指を離したときに届く`onPress`は無視されます(二重発火の防止)。`disabled`がtrueの間は値を進めません。[`components/settings/time-stepper.tsx`](../components/settings/time-stepper.tsx)から利用されています。
 - `use-draft-restore.ts`: 保存済みの下書きを読み込んで `onRestore` へ渡し、復元が完了したか（失敗した場合も完了扱い）を返すフックです。読み込み中にユーザーが入力を始めた場合はその入力を優先します。`use-draft-auto-save.ts` の `isRestored` に渡して使います。編集画面は、元の本文の読み込みと合わせて復元内容を判定する必要があるため、このフックを使わず自前で復元しています。
 
 ## 命名規則

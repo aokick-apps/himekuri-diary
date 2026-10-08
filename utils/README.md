@@ -11,6 +11,7 @@ utils/
   diary-draft-storage.ts          未保存の下書きのAsyncStorageキー定義、および暗号化した保存・復元
   diary-encryption.ts             日記データ(AsyncStorageに保存するJSON文字列)のAES-256-GCM暗号化・復号
   diary-export.ts                 日記データをJSONとしてエクスポートするためのファイル名生成・シリアライズ
+  diary-file-transfer.ts          エクスポート/インポート時のファイル入出力(Webのダウンロード、選択ファイルの読み込み)
   diary-import.ts                 JSONファイルから日記データをインポートするためのパース・検証
   diary-reminder-notifications.ts 日記リマインダー(毎日決まった時刻のローカル通知)の許可状態取得・スケジュール
   diary-search.ts                 日記本文の検索(表記ゆれの正規化・一致判定・検索結果の抜粋作成)
@@ -69,6 +70,15 @@ utils/
 
 - `buildDiaryExportFileName(date?)`: エクスポート先のファイル名(`diary-export-YYYYMMDD-HHmmss.json`)を生成します。複数回エクスポートしても上書きされないよう、日時(秒単位)を含めています。
 - `serializeDiaryEntriesForExport(entries)`: 日記データ一覧をインデント付きのJSON文字列に変換します。復号済みの平文をそのまま書き出すため、書き出し先ファイルは暗号化されません。
+
+## `diary-file-transfer.ts` の構成
+
+日記データのエクスポート・インポートで、プラットフォームによって経路が異なるファイル入出力をまとめたものです。
+
+- `downloadOnWeb(fileName, content)`: Webでは`expo-file-system`/`expo-sharing`を使えないため、Blobと`<a download>`でJSONファイルをダウンロードさせます。クリックが失敗した場合も、作成したオブジェクトURLは必ず解放します。
+- `readPickedFileContent(asset)`: `expo-document-picker`で選択したファイルの内容を読み込みます。ネイティブでは`expo-file-system`の`File`で、Webではピッカーが返すブラウザ標準の`File`(`asset.file`)から読み込みます。
+
+[`components/settings/data-management-buttons.tsx`](../components/settings/data-management-buttons.tsx)から利用されます。
 
 ## `diary-import.ts` の構成
 

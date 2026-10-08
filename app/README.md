@@ -41,7 +41,7 @@ app/
 `(tabs)` のように名前を丸括弧で囲んだディレクトリは、expo-routerの[グループ機能](https://docs.expo.dev/router/basics/common-navigation-patterns/)です。URLパス（画面遷移のパス）には反映されず、あくまで「タブナビゲーションでまとめる画面群」を整理するためのフォルダになっています。
 
 - `(tabs)/index.tsx` … タブの「日記」に対応する画面（カレンダー表示・日記の入力・検索）。カレンダーは設定画面で選択した表示レイアウト（月表示/週表示）で描画します。
-- `(tabs)/settings.tsx` … タブの「設定」に対応する画面。テーマ・カレンダー表示レイアウト・日記リマインダー・アプリロックの各設定、法的情報・サポートへのリンク（[`constants/settings-menu.ts`](../constants/settings-menu.ts)で定義）、およびデータ管理（日記データのエクスポート・インポート・全件削除）を、縦スクロールの1画面にまとめています。
+- `(tabs)/settings.tsx` … タブの「設定」に対応する画面。テーマ・カレンダー表示レイアウト・日記リマインダー・アプリロックの各設定、法的情報・サポートへのリンク（[`constants/settings-menu.ts`](../constants/settings-menu.ts)で定義）、およびデータ管理（日記データのエクスポート・インポート・全件削除）を、縦スクロールの1画面にまとめています。各セクションの実装は [`components/settings/`](../components/settings) に分かれています。
 
 タブを追加したい場合は、`(tabs)/` ディレクトリに新しい画面ファイルを追加し、`(tabs)/_layout.tsx` の `Tabs.Screen` に対応する設定（`name`、`title`、`tabBarIcon` など）を追記してください。
 

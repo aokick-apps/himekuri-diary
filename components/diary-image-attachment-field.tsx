@@ -12,10 +12,6 @@ import { MAX_DIARY_IMAGES_PER_ENTRY } from '@/utils/diary-storage';
 
 const THUMBNAIL_SIZE = 72;
 
-export const IMAGE_PERMISSION_DENIED_TITLE = '写真へのアクセスが許可されていません';
-export const IMAGE_PERMISSION_DENIED_MESSAGE =
-  '写真を添付するには、端末の設定アプリからこのアプリの写真へのアクセスを許可してください。';
-
 // 日記の入力画面で使う添付画像の欄。上限枚数までは「写真を添付」、添付済みの画像には差し替え・削除を出す
 export function DiaryImageAttachmentField({
   drafts,
@@ -38,10 +34,6 @@ export function DiaryImageAttachmentField({
   const pickInto = async (index?: number) => {
     try {
       const result = await pickDiaryImageAsync();
-      if (result.status === 'denied') {
-        Alert.alert(IMAGE_PERMISSION_DENIED_TITLE, IMAGE_PERMISSION_DENIED_MESSAGE);
-        return;
-      }
       if (result.status === 'canceled') {
         return;
       }

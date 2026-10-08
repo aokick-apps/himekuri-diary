@@ -20,18 +20,13 @@ export function getDiaryImageFile(image: DiaryImage): File {
   return new File(getDiaryImagesDirectory(), image.fileName);
 }
 
-export type PickDiaryImageResult =
-  { status: 'picked'; uri: string } | { status: 'canceled' } | { status: 'denied' };
+export type PickDiaryImageResult = { status: 'picked'; uri: string } | { status: 'canceled' };
 
 /**
- * フォトライブラリから画像を1枚選ばせる。許可が拒否されている場合は、呼び出し側が案内を出せるよう
- * 例外ではなく`denied`を返す。
+ * フォトライブラリから画像を1枚選ばせる。OS標準の選択画面は選ばれた写真だけをアプリに渡すため、
+ * 写真ライブラリ全体へのアクセス許可は求めない
  */
 export async function pickDiaryImageAsync(): Promise<PickDiaryImageResult> {
-  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!permission.granted) {
-    return { status: 'denied' };
-  }
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ['images'],
     quality: 0.8,

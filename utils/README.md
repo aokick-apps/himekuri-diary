@@ -143,7 +143,7 @@ JSONファイルから日記データをインポート(再取り込み)する�
 
 日記の添付画像のファイル操作をまとめたものです。画像本体はアプリ専用ディレクトリ(`Paths.document/diary-images/`)に置き、日記データにはファイル名だけを保存します。Webは`expo-file-system`のファイルシステムAPIに対応していないため、`isDiaryImageAttachmentSupported()`がfalseになり、添付の操作自体を表示しません。
 
-- `pickDiaryImageAsync()`: フォトライブラリから画像を1枚選ばせます。写真へのアクセスが許可されていない場合は、例外ではなく`{ status: 'denied' }`を返します。
+- `pickDiaryImageAsync()`: フォトライブラリから画像を1枚選ばせます。OS標準の写真選択画面は選ばれた写真だけをアプリに渡すため、写真ライブラリ全体へのアクセス許可は求めません。
 - `saveDiaryImage(uri)` / `getDiaryImageFile(image)`: 選んだ画像をアプリ専用ディレクトリへコピーし、参照を返します。表示には`getDiaryImageFile(image).uri`を使います。
 - `DiaryImageDraft` / `toDiaryImageDrafts` / `commitDiaryImageDrafts`: 入力画面で編集中の添付画像です。選んだ時点ではコピーせず、保存時に`commitDiaryImageDrafts`で初めてコピーします(保存せずに閉じた場合に、参照されないファイルを残さないため)。コピーの途中で失敗した場合は、それまでにコピーした分を削除します。
 - `getRemovedDiaryImages(before, after)` / `isSameDiaryImageDrafts(a, b)`: 保存によって参照されなくなった画像の抽出と、未保存の変更があるかの判定です。

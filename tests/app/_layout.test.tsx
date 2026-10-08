@@ -56,6 +56,15 @@ jest.mock('@/utils/app-lock-authentication', () => ({
   authenticateForAppLockAsync: jest.fn(() => Promise.resolve(true)),
 }));
 
+// 実物のexpo-notificationsは読み込むだけでExpo Go向けのPush通知警告を出しテスト出力を汚すため、
+// ラッパーごとモック化する(tests/app/settings.test.tsxと同じ方式)。
+jest.mock('@/utils/diary-reminder-notifications', () => ({
+  getReminderPermissionStatusAsync: jest.fn(() => Promise.resolve('undetermined')),
+  requestReminderPermissionAsync: jest.fn(() => Promise.resolve('undetermined')),
+  scheduleDailyReminderAsync: jest.fn(() => Promise.resolve()),
+  cancelDailyReminderAsync: jest.fn(() => Promise.resolve()),
+}));
+
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const mockedAppLockAuthentication = require('@/utils/app-lock-authentication') as {
   isAppLockSupportedAsync: jest.Mock;

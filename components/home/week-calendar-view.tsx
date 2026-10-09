@@ -44,6 +44,7 @@ export function WeekCalendarView({
 }) {
   const textColor = useThemeColor({}, 'text');
   const tintColor = useThemeColor({}, 'tint');
+  const linkColor = useThemeColor({}, 'link');
   const backgroundColor = useThemeColor({}, 'background');
   const iconColor = useThemeColor({}, 'icon');
 
@@ -192,7 +193,7 @@ export function WeekCalendarView({
                       accessibilityRole="button"
                       accessibilityLabel={`${formatDateHeading(weekDay.dateKey)}の日記を新規作成`}
                     >
-                      <ThemedText style={[styles.weekCreateButtonText, { color: tintColor }]}>
+                      <ThemedText style={[styles.weekCreateButtonText, { color: linkColor }]}>
                         +
                       </ThemedText>
                     </Pressable>

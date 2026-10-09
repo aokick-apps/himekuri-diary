@@ -22,6 +22,7 @@ export function TimeStepper({
   disabled: boolean;
 }) {
   const tintColor = useThemeColor({}, 'tint');
+  const linkColor = useThemeColor({}, 'link');
   const formattedValue = String(value).padStart(2, '0');
   // 見た目の「21時」と読み上げを揃える
   const valueLabel = `${formattedValue}${label}`;
@@ -62,7 +63,7 @@ export function TimeStepper({
         accessibilityState={{ disabled }}
         style={[styles.button, { borderColor: tintColor, opacity: disabled ? 0.4 : 1 }]}
       >
-        <ThemedText style={[styles.buttonText, { color: tintColor }]}>−</ThemedText>
+        <ThemedText style={[styles.buttonText, { color: linkColor }]}>−</ThemedText>
       </Pressable>
       <ThemedView
         accessible
@@ -89,7 +90,7 @@ export function TimeStepper({
         accessibilityState={{ disabled }}
         style={[styles.button, { borderColor: tintColor, opacity: disabled ? 0.4 : 1 }]}
       >
-        <ThemedText style={[styles.buttonText, { color: tintColor }]}>+</ThemedText>
+        <ThemedText style={[styles.buttonText, { color: linkColor }]}>+</ThemedText>
       </Pressable>
     </ThemedView>
   );

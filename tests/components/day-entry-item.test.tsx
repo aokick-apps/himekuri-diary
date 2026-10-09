@@ -3,6 +3,12 @@ import React from 'react';
 import { StyleSheet } from 'react-native';
 
 import { DayEntryItem } from '@/components/day-entry-item';
+import { Colors } from '@/constants/theme';
+
+let mockColorScheme: 'light' | 'dark' = 'light';
+jest.mock('@/contexts/theme-preference-context', () => ({
+  useThemePreference: () => ({ colorScheme: mockColorScheme }),
+}));
 
 const entry = { id: '1', text: '本文', createdAt: new Date(2026, 7, 15, 9, 0).toISOString() };
 
@@ -13,6 +19,21 @@ function renderItem() {
 }
 
 describe('DayEntryItem', () => {
+  it.each(['light', 'dark'] as const)(
+    'uses the link color for copy and edit labels in %s theme',
+    (scheme) => {
+      mockColorScheme = scheme;
+      renderItem();
+
+      for (const label of ['コピー', '編集']) {
+        const style = StyleSheet.flatten(screen.getByText(label).props.style);
+        expect(style.color).toBe(Colors[scheme].link);
+      }
+      expect(Colors.dark.link).not.toBe(Colors.dark.text);
+      mockColorScheme = 'light';
+    },
+  );
+
   it('gives every action button a touch target of at least 44pt', () => {
     renderItem();
 

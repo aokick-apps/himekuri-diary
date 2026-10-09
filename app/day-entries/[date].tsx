@@ -82,6 +82,7 @@ export default function DayEntriesScreen() {
   const scrollRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const tintColor = useThemeColor({}, 'tint');
+  const linkColor = useThemeColor({}, 'link');
   const errorColor = useThemeColor({}, 'error');
   // この画面はタブバーを持たないため、セーフエリア下端ぶんのみモーダルコンテンツの下端に加算する
   const insets = useSafeAreaInsets();
@@ -424,7 +425,7 @@ export default function DayEntriesScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="再試行"
               >
-                <ThemedText style={[styles.retryButtonText, { color: tintColor }]}>
+                <ThemedText style={[styles.retryButtonText, { color: linkColor }]}>
                   再試行
                 </ThemedText>
               </Pressable>
@@ -434,7 +435,7 @@ export default function DayEntriesScreen() {
           )}
         </ThemedView>
       ) : null,
-    [hasLoadedEntries, hasLoadError, errorColor, tintColor, loadEntries],
+    [hasLoadedEntries, hasLoadError, errorColor, tintColor, linkColor, loadEntries],
   );
 
   return (

@@ -1,9 +1,15 @@
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 
 import { DiaryImageAttachmentField } from '@/components/diary-image-attachment-field';
+import { Colors } from '@/constants/theme';
 import type { DiaryImageDraft } from '@/utils/diary-images';
+
+let mockColorScheme: 'light' | 'dark' = 'light';
+jest.mock('@/contexts/theme-preference-context', () => ({
+  useThemePreference: () => ({ colorScheme: mockColorScheme }),
+}));
 
 jest.mock('@/utils/diary-images', () => ({
   isDiaryImageAttachmentSupported: jest.fn(() => true),
@@ -26,6 +32,21 @@ describe('DiaryImageAttachmentField', () => {
     mockedDiaryImages.isDiaryImageAttachmentSupported.mockReturnValue(true);
     jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   });
+
+  it.each(['light', 'dark'] as const)(
+    'uses the link color for the add and replace labels in %s theme',
+    (scheme) => {
+      mockColorScheme = scheme;
+      const { rerender } = render(<DiaryImageAttachmentField drafts={[]} onChange={jest.fn()} />);
+      const addStyle = StyleSheet.flatten(screen.getByText('写真を添付').props.style);
+      expect(addStyle.color).toBe(Colors[scheme].link);
+
+      rerender(<DiaryImageAttachmentField drafts={[STORED]} onChange={jest.fn()} />);
+      const replaceStyle = StyleSheet.flatten(screen.getByText('差し替え').props.style);
+      expect(replaceStyle.color).toBe(Colors[scheme].link);
+      mockColorScheme = 'light';
+    },
+  );
 
   it('shows only the "写真を添付" button while nothing is attached (正常系: 未添付)', () => {
     render(<DiaryImageAttachmentField drafts={[]} onChange={jest.fn()} />);

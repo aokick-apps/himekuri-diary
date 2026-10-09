@@ -44,6 +44,7 @@ export function AppLockScreen({
   onDisableAppLock,
 }: AppLockScreenProps) {
   const tintColor = useThemeColor({}, 'tint');
+  const linkColor = useThemeColor({}, 'link');
   const backgroundColor = useThemeColor({}, 'background');
   const errorColor = useThemeColor({}, 'error');
   // translucentなModalはシステムバーの背後まで描画されるため、Modalの外側で取得したインセットを加算する
@@ -136,7 +137,7 @@ export function AppLockScreen({
             onPress={onDisableAppLock}
             accessibilityRole="button"
           >
-            <ThemedText style={[styles.buttonText, { color: tintColor }]}>
+            <ThemedText style={[styles.buttonText, { color: linkColor }]}>
               アプリロックを解除
             </ThemedText>
           </Pressable>

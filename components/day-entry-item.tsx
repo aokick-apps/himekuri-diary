@@ -23,7 +23,7 @@ export function DayEntryItem({
   onEdit: (entry: DiaryEntry) => void;
   onDelete: (entry: DiaryEntry) => void;
 }) {
-  const tintColor = useThemeColor({}, 'tint');
+  const linkColor = useThemeColor({}, 'link');
   const iconColor = useThemeColor({}, 'icon');
   const errorColor = useThemeColor({}, 'error');
   const highlightBackgroundColor = useThemeColor({}, 'searchHighlightBackground');
@@ -51,7 +51,7 @@ export function DayEntryItem({
             accessibilityRole="button"
             accessibilityLabel="日記本文をコピー"
           >
-            <ThemedText style={[styles.entryActionText, { color: tintColor }]}>コピー</ThemedText>
+            <ThemedText style={[styles.entryActionText, { color: linkColor }]}>コピー</ThemedText>
           </Pressable>
           <Pressable
             onPress={() => onEdit(entry)}
@@ -59,7 +59,7 @@ export function DayEntryItem({
             accessibilityRole="button"
             accessibilityLabel="この日記を編集"
           >
-            <ThemedText style={[styles.entryActionText, { color: tintColor }]}>編集</ThemedText>
+            <ThemedText style={[styles.entryActionText, { color: linkColor }]}>編集</ThemedText>
           </Pressable>
         </View>
         <Pressable

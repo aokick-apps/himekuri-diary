@@ -94,6 +94,30 @@ describe('DiaryReminderProvider / useDiaryReminder', () => {
       );
     });
 
+    it('turns enabled off and cancels the schedule when the permission changes from granted to undetermined while resuming (異常系: granted→undeterminedでもenabledをOFFに戻す)', async () => {
+      mockedNotificationsUtil.getReminderPermissionStatusAsync.mockResolvedValue('granted');
+      const { result } = renderHook(() => useDiaryReminder(), { wrapper });
+      await act(async () => {
+        await Promise.resolve();
+      });
+      await act(async () => {
+        await result.current.setEnabled(true);
+      });
+      expect(result.current.enabled).toBe(true);
+      const handleAppStateChange = getAppStateChangeListener();
+      jest.clearAllMocks();
+      mockedNotificationsUtil.getReminderPermissionStatusAsync.mockResolvedValue('undetermined');
+
+      await act(async () => {
+        handleAppStateChange('active');
+        await Promise.resolve();
+      });
+
+      expect(result.current.permissionStatus).toBe('undetermined');
+      expect(result.current.enabled).toBe(false);
+      expect(mockedNotificationsUtil.cancelDailyReminderAsync).toHaveBeenCalledTimes(1);
+    });
+
     it('keeps enabled unchanged when the permission stays granted while resuming (正常系: granted→grantedはenabled不変)', async () => {
       mockedNotificationsUtil.getReminderPermissionStatusAsync.mockResolvedValue('granted');
       const { result } = renderHook(() => useDiaryReminder(), { wrapper });

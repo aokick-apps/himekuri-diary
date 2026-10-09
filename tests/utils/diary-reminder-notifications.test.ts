@@ -143,6 +143,24 @@ describe('utils/diary-reminder-notifications', () => {
       await expect(requestReminderPermissionAsync()).resolves.toBe('denied');
     });
 
+    it('returns "undetermined" when the dialog is rejected but the permission can still be requested (Android)', async () => {
+      mockedNotifications.requestPermissionsAsync.mockResolvedValue({
+        status: 'denied',
+        canAskAgain: true,
+      });
+
+      await expect(requestReminderPermissionAsync()).resolves.toBe('undetermined');
+    });
+
+    it('returns "denied" when the dialog is rejected and the permission cannot be requested again', async () => {
+      mockedNotifications.requestPermissionsAsync.mockResolvedValue({
+        status: 'denied',
+        canAskAgain: false,
+      });
+
+      await expect(requestReminderPermissionAsync()).resolves.toBe('denied');
+    });
+
     it('propagates the error when the underlying call rejects (異常系)', async () => {
       mockedNotifications.requestPermissionsAsync.mockRejectedValue(new Error('native error'));
 

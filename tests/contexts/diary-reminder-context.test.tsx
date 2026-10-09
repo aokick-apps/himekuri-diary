@@ -54,6 +54,7 @@ describe('DiaryReminderProvider / useDiaryReminder', () => {
   });
 
   it('loads a previously saved enabled/time setting from AsyncStorage on mount (正常系: 起動時の復元)', async () => {
+    mockedNotificationsUtil.getReminderPermissionStatusAsync.mockResolvedValue('granted');
     await AsyncStorage.setItem(
       DIARY_REMINDER_STORAGE_KEY,
       JSON.stringify({ enabled: true, hour: 8, minute: 30 }),
@@ -114,6 +115,25 @@ describe('DiaryReminderProvider / useDiaryReminder', () => {
     expect(result.current.enabled).toBe(false);
     expect(result.current.minute).toBe(30);
     expect(result.current.permissionStatus).toBe('denied');
+    expect(mockedNotificationsUtil.cancelDailyReminderAsync).toHaveBeenCalledTimes(1);
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith(
+      DIARY_REMINDER_STORAGE_KEY,
+      JSON.stringify({ enabled: false, hour: 8, minute: 30 }),
+    );
+  });
+
+  it('corrects a stored enabled=true back to false and cancels the schedule when the permission is undetermined on mount (異常系: Androidで取り消し後に再度尋ねられる状態での起動)', async () => {
+    mockedNotificationsUtil.getReminderPermissionStatusAsync.mockResolvedValue('undetermined');
+    await AsyncStorage.setItem(
+      DIARY_REMINDER_STORAGE_KEY,
+      JSON.stringify({ enabled: true, hour: 8, minute: 30 }),
+    );
+
+    const { result } = renderHook(() => useDiaryReminder(), { wrapper });
+
+    await waitFor(() => expect(result.current.hour).toBe(8));
+
+    expect(result.current.enabled).toBe(false);
     expect(mockedNotificationsUtil.cancelDailyReminderAsync).toHaveBeenCalledTimes(1);
     expect(AsyncStorage.setItem).toHaveBeenCalledWith(
       DIARY_REMINDER_STORAGE_KEY,

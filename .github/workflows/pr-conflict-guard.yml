@@ -23,15 +23,24 @@ name: PR Conflict Guard
 on:
   pull_request:
     types: [closed]
+  # 自動実行が失敗した場合などに、オープンPRのコンフリクト確認・解消を手動でやり直すため
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: '対象のPR番号(空欄ならmain向けのオープンPRをすべて確認)'
+        required: false
+        type: string
 
 permissions:
   contents: write
   pull-requests: write
   actions: read
+  # claude-code-action がOIDCトークンでGitHub Appの認証を行うために必要
+  id-token: write
 
 jobs:
   detect:
-    if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main'
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main')
     runs-on: ubuntu-latest
     outputs:
       pr_numbers: ${{ steps.collect.outputs.pr_numbers }}
@@ -43,9 +52,21 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           MERGED_PR: ${{ github.event.pull_request.number }}
+          TARGET_PR: ${{ inputs.pr_number }}
         run: |
           set -e
-          open_prs="$(gh pr list --repo "$REPO" --state open --base main --json number --jq '.[].number')"
+          if [ -n "$TARGET_PR" ]; then
+            target="$(gh pr view "$TARGET_PR" --repo "$REPO" --json state,baseRefName --jq '.state + " " + .baseRefName')"
+            if [ "$target" != "OPEN main" ]; then
+              echo "PR #$TARGET_PR はmain向けのオープンPRではないため対象外です($target)"
+              echo "pr_numbers=[]" >> "$GITHUB_OUTPUT"
+              echo "has_conflicts=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            open_prs="$TARGET_PR"
+          else
+            open_prs="$(gh pr list --repo "$REPO" --state open --base main --json number --jq '.[].number')"
+          fi
           conflicting=()
           for n in $open_prs; do
             if [ "$n" = "$MERGED_PR" ]; then
@@ -93,7 +114,7 @@ jobs:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           allowed_bots: "claude,github-actions"
           prompt: |
-            PR #${{ github.event.pull_request.number }} がmainにマージされたことで、
+            ${{ github.event_name == 'workflow_dispatch' && 'mainの更新により' || format('PR #{0} がmainにマージされたことで', github.event.pull_request.number) }}、
             PR #${{ matrix.pr_number }} にmainとのコンフリクトが発生しています。
 
             以下の手順で対応してください。各サブエージェントはTask tool経由で必ず
@@ -113,7 +134,7 @@ jobs:
                具体的に説明した上でこのタスクを終了すること(無理に解消を強行しない)。
             3. pushに成功した場合は `qa-engineer` サブエージェントに再検証を依頼し、
                `gh pr comment ${{ matrix.pr_number }} --body "..."` で
-               「PR #${{ github.event.pull_request.number }} のマージに伴いmainとの
+               「${{ github.event_name == 'workflow_dispatch' && 'mainの更新' || format('PR #{0} のマージ', github.event.pull_request.number) }}に伴いmainとの
                コンフリクトを解消しました。再検証結果: <要約>」という内容のコメントを
                PRに残す。
             4. ここではreviewerは呼び出さないこと(解消コミットのpushをきっかけに

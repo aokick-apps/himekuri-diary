@@ -15,7 +15,7 @@ Read the exact versioned docs at https://docs.expo.dev/versions/v54.0.0/ before 
 - mainブランチへの直接コミット・pushは禁止。人間(オーナー)を含め全員、必ずfeatureブランチを作成し
   PR経由でのみ変更を反映する
 - GitHub純正のBranch protection rules / Rulesetsによる技術的な強制ブロックは**導入していない**。
-  Organization(`koji-s-private`)がGitHub Freeプランのため、privateリポジトリでのbranch protectionは
+  Organization(`aokick-apps`)がGitHub Freeプランのため、privateリポジトリでのbranch protectionは
   有料プラン(GitHub Team以上)が無いと有効化できない仕様であり(APIも`Upgrade to GitHub Pro or make
   this repository public`という403を返す)、既存の「課金が発生する可能性のある操作は絶対に実行しない」
   方針により有料化・組織移管・public化のいずれも行わないため。技術的ブロックの代わりに本ルールと
@@ -71,7 +71,7 @@ Read the exact versioned docs at https://docs.expo.dev/versions/v54.0.0/ before 
     コンフリクト解消時の方針と同様)
 
 ## GitHub Projects 運用
-- Project board: [koji-s-private/react-native-first-app AI Team](https://github.com/orgs/koji-s-private/projects/4)(Projects v2)
+- Project board: [aokick-apps/himekuri-diary AI Team](https://github.com/orgs/aokick-apps/projects/1)(Projects v2)
   - Views: Table(既定)/ Board / Roadmap
   - Status: `Todo` → `In Progress` → `Under Review` → `Done`(`Under Review` はPR作成後、reviewerのレビュー中・修正対応中に使う独自追加ステータス)
 - 必要なID(`PROJECT_OWNER`, `PROJECT_NUMBER`, `PROJECT_ID`, `STATUS_FIELD_ID`,
@@ -126,7 +126,7 @@ Read the exact versioned docs at https://docs.expo.dev/versions/v54.0.0/ before 
 - found-in-review ラベルのIssue(下記参照)も、優先度ラベルさえ付いていれば通常のIssueと全く同じ選定ロジックの対象になる
 
 ## プロダクト方針とIssue自動作成
-- 常設の[📍 プロダクトロードマップ Issue](https://github.com/koji-s-private/react-native-first-app/issues/7)(`roadmap-thread` ラベル)に
+- 常設の[📍 プロダクトロードマップ Issue](https://github.com/aokick-apps/himekuri-diary/issues/7)(`roadmap-thread` ラベル)に
   人間が機能追加・改善・方針転換をコメントで書き込む運用にしている(BACKLOG.mdは廃止)
 - [.github/workflows/roadmap-groomer.yml](.github/workflows/roadmap-groomer.yml) が
   ロードマップIssueへの新規コメントをトリガーに起動し、要望を次のいずれかに振り分ける

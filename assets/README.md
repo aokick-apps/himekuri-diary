@@ -7,7 +7,7 @@
 ```
 assets/
   images/
-    icon.png                          アプリアイコン（iOSライト・共通。透過なし）
+    icon.png                           アプリアイコン（iOSライト・共通。透過なし）
     icon-dark.png                      iOSダークモード用アイコン（透過なし）
     icon-tinted.png                    iOSティント用アイコン（白一色。色はOSが付ける）
     favicon.png                        Web用ファビコン

@@ -71,7 +71,7 @@ Read the exact versioned docs at https://docs.expo.dev/versions/v54.0.0/ before 
     コンフリクト解消時の方針と同様)
 
 ## GitHub Projects 運用
-- Project board: [aokick-apps/react-native-first-app AI Team](https://github.com/orgs/aokick-apps/projects/1)(Projects v2)
+- Project board: [aokick-apps/himekuri-diary AI Team](https://github.com/orgs/aokick-apps/projects/1)(Projects v2)
   - Views: Table(既定)/ Board / Roadmap
   - Status: `Todo` → `In Progress` → `Under Review` → `Done`(`Under Review` はPR作成後、reviewerのレビュー中・修正対応中に使う独自追加ステータス)
 - 必要なID(`PROJECT_OWNER`, `PROJECT_NUMBER`, `PROJECT_ID`, `STATUS_FIELD_ID`,
@@ -126,7 +126,7 @@ Read the exact versioned docs at https://docs.expo.dev/versions/v54.0.0/ before 
 - found-in-review ラベルのIssue(下記参照)も、優先度ラベルさえ付いていれば通常のIssueと全く同じ選定ロジックの対象になる
 
 ## プロダクト方針とIssue自動作成
-- 常設の[📍 プロダクトロードマップ Issue](https://github.com/aokick-apps/react-native-first-app/issues/7)(`roadmap-thread` ラベル)に
+- 常設の[📍 プロダクトロードマップ Issue](https://github.com/aokick-apps/himekuri-diary/issues/7)(`roadmap-thread` ラベル)に
   人間が機能追加・改善・方針転換をコメントで書き込む運用にしている(BACKLOG.mdは廃止)
 - [.github/workflows/roadmap-groomer.yml](.github/workflows/roadmap-groomer.yml) が
   ロードマップIssueへの新規コメントをトリガーに起動し、要望を次のいずれかに振り分ける

@@ -37,7 +37,7 @@
 
    ```bash
    git clone <このリポジトリのURL>
-   cd react-native-first-app
+   cd himekuri-diary
    ```
 
 2. 依存パッケージをインストールする

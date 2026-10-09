@@ -95,6 +95,24 @@ describe('utils/diary-reminder-notifications', () => {
       await expect(getReminderPermissionStatusAsync()).resolves.toBe('undetermined');
     });
 
+    it('returns "undetermined" when denied but the permission can still be requested (Android)', async () => {
+      mockedNotifications.getPermissionsAsync.mockResolvedValue({
+        status: 'denied',
+        canAskAgain: true,
+      });
+
+      await expect(getReminderPermissionStatusAsync()).resolves.toBe('undetermined');
+    });
+
+    it('returns "denied" when denied and the permission cannot be requested again', async () => {
+      mockedNotifications.getPermissionsAsync.mockResolvedValue({
+        status: 'denied',
+        canAskAgain: false,
+      });
+
+      await expect(getReminderPermissionStatusAsync()).resolves.toBe('denied');
+    });
+
     it('does not show an OS confirmation dialog (uses getPermissionsAsync, not requestPermissionsAsync) (回帰確認)', async () => {
       mockedNotifications.getPermissionsAsync.mockResolvedValue({ status: 'granted' });
 

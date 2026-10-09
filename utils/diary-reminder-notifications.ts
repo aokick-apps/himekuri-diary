@@ -27,7 +27,11 @@ Notifications.setNotificationHandler({
 
 /** 現在の通知許可状態を、OSの確認ダイアログを表示せずに取得する。 */
 export async function getReminderPermissionStatusAsync(): Promise<ReminderPermissionStatus> {
-  const { status } = await Notifications.getPermissionsAsync();
+  const { status, canAskAgain } = await Notifications.getPermissionsAsync();
+  // Android 13以降は未リクエストでも'denied'かつcanAskAgain: trueが返るため、未確認として扱う
+  if (status === 'denied' && canAskAgain === true) {
+    return 'undetermined';
+  }
   return status;
 }
 

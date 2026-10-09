@@ -4,6 +4,12 @@ import { AccessibilityInfo, Modal, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AppLockScreen } from '@/components/app-lock-screen';
+import { Colors } from '@/constants/theme';
+
+let mockColorScheme: 'light' | 'dark' = 'light';
+jest.mock('@/contexts/theme-preference-context', () => ({
+  useThemePreference: () => ({ colorScheme: mockColorScheme }),
+}));
 
 const AUTHENTICATE_BUTTON_TEXT = '認証する';
 const DISABLE_BUTTON_TEXT = 'アプリロックを解除';
@@ -269,6 +275,24 @@ describe('AppLockScreen', () => {
   // 端末側の生体認証・パスコード設定が全て削除されると、
   // isSupportedがfalseになり、ロック画面からアプリロックをOFFにできる脱出導線が必要になる
   describe('端末側の認証手段が失われた場合の脱出導線', () => {
+    it.each(['light', 'dark'] as const)(
+      'uses the link color for the escape button label in %s theme',
+      (scheme) => {
+        mockColorScheme = scheme;
+        render(
+          <AppLockScreen
+            visible={true}
+            isSupported={false}
+            onAuthenticate={jest.fn().mockResolvedValue('failure')}
+            onDisableAppLock={jest.fn()}
+          />,
+        );
+
+        const style = StyleSheet.flatten(screen.getByText(DISABLE_BUTTON_TEXT).props.style);
+        expect(style.color).toBe(Colors[scheme].link);
+        mockColorScheme = 'light';
+      },
+    );
     it('shows the "アプリロックを解除" escape button instead of the retry button when isSupported is false (異常系: 非対応端末)', () => {
       render(
         <AppLockScreen

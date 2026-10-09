@@ -26,11 +26,18 @@ tests/
     theme.test.ts        constants/theme.ts（ライト/ダークモードの色定義）のテスト
   contexts/
     theme-preference-context.test.tsx   contexts/theme-preference-context.tsx（配色設定）のテスト
-    diary-reminder-context.test.tsx   contexts/diary-reminder-context.tsx（日記リマインダー通知の設定・永続化）のテスト
-    app-lock-context.test.tsx   contexts/app-lock-context.tsx（アプリロックのON/OFF設定・永続化・background遷移時の再ロック）のテスト
+    diary-reminder-context*.test.tsx   contexts/diary-reminder-context.tsx（日記リマインダー通知の設定・永続化）のテスト。初期化・setEnabled・setTime・AppState復帰ごとにファイルを分割
+
+    app-lock-context*.test.tsx   contexts/app-lock-context.tsx（アプリロックのON/OFF設定・永続化・background遷移時の再ロック）のテスト。初期化・自動認証・AppState遷移ごとにファイルを分割
+  helpers/
+    複数のテストファイルで共有するモック・ヘルパー（diary-storage・diary-reminder・app-lock向け等）
   utils/
     diary-encryption.test.ts   utils/diary-encryption.ts（日記データの暗号化・復号）のテスト
-    diary-storage.test.ts      utils/diary-storage.ts（日記データの全件削除）のテスト
+    diary-storage.test.ts      utils/diary-storage.ts（全件削除・保存・削除・単体取得・型ガード）のテスト
+    diary-storage-get-all.test.ts   getAllDiaryEntries（一覧取得・並び順・破損データの扱い）のテスト
+    diary-storage-key-failure-migration.test.ts   暗号鍵の取得失敗時の挙動とレガシーキーからの移行のテスト
+    diary-entries-by-date.test.ts   utils/diary-entries-by-date.ts（日付ごとのグルーピング）のテスト
+    save-feedback.test.ts      utils/save-feedback.ts（保存成功時の触覚フィードバック）のテスト
     diary-date.test.ts         utils/diary-date.ts（日記の日付・時刻の整形/変換)のテスト
     diary-text.test.ts         utils/diary-text.ts（日記本文の文字数上限・切り詰め)のテスト
     diary-reminder-notifications.test.ts   utils/diary-reminder-notifications.ts（expo-notificationsラッパー。許可リクエスト・日次スケジュール登録/キャンセル）のテスト

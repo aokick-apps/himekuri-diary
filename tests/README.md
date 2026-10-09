@@ -9,12 +9,16 @@ tests/
   app/
     _layout.test.tsx      app/_layout.tsx（アプリ全体のレイアウト・オンボーディング表示制御）のテスト
     index.test.tsx      app/(tabs)/index.tsx（日記画面）のテスト
-    settings.test.tsx      app/(tabs)/settings.tsx（設定画面）のテスト
+    settings/            app/(tabs)/settings.tsx（設定画面）のテスト。機能単位で分割（screen / delete-all / export / import / appearance / calendar-layout / reminder* / backup-images / app-lock）
     oss-licenses.test.tsx など   app/oss-licenses.tsx（OSSライセンス画面）のテスト
     day-entries/
       [date].test.tsx   app/day-entries/[date].tsx（日付ごとの日記一覧画面）のテスト
     edit-entry/
       [id].test.tsx     app/edit-entry/[id].tsx（日記編集画面）のテスト
+  helpers/
+    settings-screen-mocks.ts   設定画面テスト共通のモック（ファイルシステム・通知・生体認証など）のファクトリ
+    mock-diary-images.ts       diary-imagesのモック
+    mock-memory-file-system.ts expo-file-systemのインメモリ実装(バックアップの読み書きテスト用)
   components/
     onboarding.test.tsx    components/onboarding.tsx（初回起動時のオンボーディング画面）のテスト
     save-toast.test.tsx    components/save-toast.tsx（保存成功時に表示する一時的なトースト）のテスト

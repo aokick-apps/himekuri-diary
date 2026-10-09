@@ -23,6 +23,8 @@ export function TimeStepper({
 }) {
   const tintColor = useThemeColor({}, 'tint');
   const formattedValue = String(value).padStart(2, '0');
+  // 見た目の「21時」と読み上げを揃える
+  const valueLabel = `${formattedValue}${label}`;
   const previousValueRef = useRef(value);
   const shouldAnnounceValueChangeRef = useRef(false);
   const handleDecrease = useCallback(() => {
@@ -42,15 +44,14 @@ export function TimeStepper({
       shouldAnnounceValueChangeRef.current &&
       Platform.OS === 'ios'
     ) {
-      AccessibilityInfo.announceForAccessibility(`${label} ${formattedValue}`);
+      AccessibilityInfo.announceForAccessibility(valueLabel);
     }
     shouldAnnounceValueChangeRef.current = false;
     previousValueRef.current = value;
-  }, [formattedValue, label, value]);
+  }, [valueLabel, value]);
 
   return (
     <ThemedView style={styles.group}>
-      <ThemedText style={styles.label}>{label}</ThemedText>
       <Pressable
         onPress={decreaseAutoRepeat.onPress}
         onPressIn={decreaseAutoRepeat.onPressIn}
@@ -63,15 +64,21 @@ export function TimeStepper({
       >
         <ThemedText style={[styles.buttonText, { color: tintColor }]}>−</ThemedText>
       </Pressable>
-      <ThemedText
-        // 値が変わっても桁の幅が揺れないよう等幅フォントで表示する
-        font="mono"
-        accessibilityLabel={`${label} ${formattedValue}`}
+      <ThemedView
+        accessible
+        accessibilityLabel={valueLabel}
         accessibilityLiveRegion={Platform.OS === 'android' ? 'polite' : undefined}
-        style={[styles.value, { opacity: disabled ? 0.4 : 1 }]}
+        style={[styles.valueGroup, { opacity: disabled ? 0.4 : 1 }]}
       >
-        {formattedValue}
-      </ThemedText>
+        <ThemedText
+          // 値が変わっても桁の幅が揺れないよう等幅フォントで表示する
+          font="mono"
+          style={styles.value}
+        >
+          {formattedValue}
+        </ThemedText>
+        <ThemedText style={styles.label}>{label}</ThemedText>
+      </ThemedView>
       <Pressable
         onPress={increaseAutoRepeat.onPress}
         onPressIn={increaseAutoRepeat.onPressIn}
@@ -96,6 +103,11 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 13,
+  },
+  valueGroup: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 2,
   },
   value: {
     minWidth: 28,

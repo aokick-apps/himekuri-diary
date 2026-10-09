@@ -1,7 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import React from 'react';
-import { InputAccessoryView, Keyboard, Platform } from 'react-native';
+import { InputAccessoryView, Keyboard, Platform, StyleSheet } from 'react-native';
 
+import { Colors } from '@/constants/theme';
 import { KeyboardDoneAccessory } from '@/components/keyboard-done-accessory';
 
 const originalOS = Platform.OS;
@@ -23,6 +24,15 @@ describe('KeyboardDoneAccessory', () => {
     expect(screen.UNSAFE_getByType(InputAccessoryView).props.nativeID).toBe('test-accessory');
     expect(screen.getByRole('button', { name: 'キーボードを閉じる' })).toBeTruthy();
     expect(screen.getByText('完了')).toBeTruthy();
+  });
+
+  it('uses the accent link color for "完了" so it differs from the body text in dark mode (正常系)', () => {
+    setPlatform('ios');
+    render(<KeyboardDoneAccessory nativeID="test-accessory" />);
+
+    const style = StyleSheet.flatten(screen.getByText('完了').props.style);
+    expect(style.color).toBe(Colors.light.link);
+    expect(Colors.dark.link).not.toBe(Colors.dark.text);
   });
 
   it('dismisses the keyboard when "完了" is pressed (正常系)', () => {

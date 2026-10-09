@@ -1,5 +1,4 @@
 import { randomUUID } from 'expo-crypto';
-import * as Haptics from 'expo-haptics';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
@@ -30,6 +29,7 @@ import {
   SAVE_SUCCESS_MESSAGE,
 } from '@/constants/diary-messages';
 import { useCalendarLayoutPreference } from '@/contexts/calendar-layout-preference-context';
+import { useDiaryWriteQueue } from '@/hooks/use-diary-write-queue';
 import { useDraftAutoSave } from '@/hooks/use-draft-auto-save';
 import { useDraftRestore } from '@/hooks/use-draft-restore';
 import { useDiarySearch } from '@/hooks/use-diary-search';
@@ -41,15 +41,16 @@ import {
   DIARY_DRAFT_STORAGE_KEY,
   DIARY_NEW_ENTRY_DRAFT_STORAGE_KEY_PREFIX,
 } from '@/utils/diary-draft-storage';
+import { groupEntriesByDate } from '@/utils/diary-entries-by-date';
 import { BODY_MAX_LENGTH, splitIntoGraphemes, truncateToBodyMaxLength } from '@/utils/diary-text';
 import {
   buildDiaryPartialCorruptionMessage,
   DIARY_LOAD_ERROR_MESSAGE,
   getAllDiaryEntries,
-  saveDiaryEntry,
   type DiaryEntry,
   type DiaryImage,
 } from '@/utils/diary-storage';
+import { notifySaveSuccessHaptics } from '@/utils/save-feedback';
 
 // タブバー(@react-navigation/bottom-tabsのデフォルト、tabBarStyle未カスタマイズ)のおおよその
 // コンテンツ高さ(セーフエリア分は含まない)。ボトムシート系モーダルの下端がタブバーと重ならないよう、
@@ -90,18 +91,16 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const modalContentBottomPadding = insets.bottom + BOTTOM_TAB_BAR_CONTENT_HEIGHT;
 
-  // この画面内の保存処理(新規保存・日付指定の新規作成)を直列化するキュー。
+  // この画面内の保存処理(新規保存・日付指定の新規作成)を直列化する。
   // 編集・削除は専用画面で直接永続化するため対象外。loadEntriesが参照するため宣言順を前にしている
-  const writeQueueRef = useRef<Promise<void>>(Promise.resolve());
-  // キューに積まれ未完了のタスク件数。loadEntriesがwriteQueueRef.currentを待つべきか判定するのに使う
-  const pendingWriteCountRef = useRef(0);
+  const { enqueueDiaryWrite, getPendingWrites } = useDiaryWriteQueue();
 
   const loadEntries = useCallback(async () => {
     // pending中の書き込みがある場合、待たずに読み込むと楽観的更新後の内容が一瞬古い内容に
-    // 戻ってちらつくため、直近の書き込み完了を待ってから読み込む。pending無しでも無条件にawaitすると
-    // 他の非同期処理との実行順序が余分な1マイクロタスク分ずれるため、必要な場合のみ待つ
-    if (pendingWriteCountRef.current > 0) {
-      await writeQueueRef.current;
+    // 戻ってちらつくため、直近の書き込み完了を待ってから読み込む
+    const pendingWrites = getPendingWrites();
+    if (pendingWrites) {
+      await pendingWrites;
     }
     // getAllDiaryEntriesはストレージが空・壊れている場合も例外を投げず空配列を返すため、
     // ここで個別にtry/catchする必要はない。読み込みエラーの有無はonErrorで受け取り、
@@ -123,28 +122,7 @@ export default function HomeScreen() {
     }
     // 初回読み込み完了を示す(isLoadingは一方向にのみ遷移し、trueへ戻す処理は無い)
     setIsLoading(false);
-  }, []);
-
-  // エントリ単位の個別キーで保存するため、他のエントリの読み書きは発生しない
-  const enqueueDiaryWrite = useCallback((entry: DiaryEntry): Promise<void> => {
-    // 実行完了を待たず、積んだ時点で同期的にインクリメントする。これにより呼び出し直後に
-    // loadEntriesが走っても未実行のタスクの存在を検知できる
-    pendingWriteCountRef.current += 1;
-    const task = writeQueueRef.current.then(async () => {
-      await saveDiaryEntry(entry);
-    });
-    // キューは成否に関わらず先へ進める(失敗はtask側で呼び出し元に伝わる)。
-    // pendingWriteCountRefも成否問わず完了時点でデクリメントする
-    writeQueueRef.current = task.then(
-      () => {
-        pendingWriteCountRef.current -= 1;
-      },
-      () => {
-        pendingWriteCountRef.current -= 1;
-      },
-    );
-    return task;
-  }, []);
+  }, [getPendingWrites]);
 
   // expo-routerの`Tabs`はタブ画面をアンマウントせず保持するため、マウント時一度きりのuseEffectだと
   // 他画面(設定タブの全件削除等)によるAsyncStorageの変更がstateに反映されないまま残り、
@@ -202,9 +180,7 @@ export default function HomeScreen() {
 
         // 保存成功をユーザーに明示するため、トーストとハプティックフィードバックを発火する
         setSaveToastMessage(SAVE_SUCCESS_MESSAGE);
-        if (process.env.EXPO_OS === 'ios') {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        }
+        notifySaveSuccessHaptics();
       },
       onError: () => {
         // 保存中に入力が更新されていない場合だけ、保存前の内容を復元する
@@ -259,9 +235,7 @@ export default function HomeScreen() {
   const handleNewEntrySaved = useCallback(() => {
     setNewEntryDate(null);
     setSaveToastMessage(SAVE_SUCCESS_MESSAGE);
-    if (process.env.EXPO_OS === 'ios') {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    }
+    notifySaveSuccessHaptics();
   }, []);
 
   // トーストを非表示にする。SaveToastのuseEffect依存配列に含まれるため、参照を安定させないと
@@ -275,21 +249,7 @@ export default function HomeScreen() {
   }, []);
 
   // 日付ごとに日記をまとめる(カレンダーセルへの表示・タップ時の一覧表示の両方で利用する)
-  const entriesByDate = useMemo(() => {
-    const map: Record<string, DiaryEntry[]> = {};
-    for (const entry of entries) {
-      const key = toDateKey(new Date(entry.createdAt));
-      if (!map[key]) {
-        map[key] = [];
-      }
-      map[key].push(entry);
-    }
-    // 各日付内は書かれた時刻の昇順に揃える(「その日最初の1件」が常に先頭に来るように)
-    for (const key of Object.keys(map)) {
-      map[key].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
-    }
-    return map;
-  }, [entries]);
+  const entriesByDate = useMemo(() => groupEntriesByDate(entries), [entries]);
 
   const { searchQuery, setSearchQuery, trimmedSearchQuery, searchResults, clearSearch } =
     useDiarySearch(entries);

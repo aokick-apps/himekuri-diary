@@ -12,7 +12,7 @@ export function isDiaryImageAttachmentSupported(): boolean {
   return Platform.OS !== 'web';
 }
 
-function getDiaryImagesDirectory(): Directory {
+export function getDiaryImagesDirectory(): Directory {
   return new Directory(Paths.document, DIARY_IMAGES_DIRECTORY_NAME);
 }
 

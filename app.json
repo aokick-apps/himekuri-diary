@@ -1,15 +1,17 @@
 {
   "expo": {
-    "name": "my-first-app",
-    "slug": "my-first-app",
+    "name": "ひめくり日記",
+    "slug": "himekuri",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "myfirstapp",
+    "scheme": "himekuri",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.aokick.himekuri",
+      "buildNumber": "1",
       "icon": {
         "light": "./assets/images/icon.png",
         "dark": "./assets/images/icon-dark.png",
@@ -17,6 +19,8 @@
       }
     },
     "android": {
+      "package": "com.aokick.himekuri",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#0a7ea4",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

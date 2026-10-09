@@ -120,7 +120,7 @@ describe('SettingsScreen', () => {
     expect(contact).toBeDefined();
     expect(contact?.type).toBe('mailto');
     if (contact?.type === 'mailto') {
-      expect(contact.href.startsWith('mailto:')).toBe(true);
+      expect(contact.href).toBe('mailto:aokick.apps@gmail.com');
     }
 
     const link = screen.getByTestId(`link-${contact?.href}`);

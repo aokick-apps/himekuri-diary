@@ -45,9 +45,8 @@ export type SettingsSection = {
 const PRIVACY_POLICY_URL = 'https://example.com/legal/privacy-policy';
 const TERMS_OF_SERVICE_URL = 'https://example.com/legal/terms-of-service';
 
-// TODO: 実際の問い合わせ用連絡先メールアドレスが確定次第差し替える
-// (docs/legal/privacy-policy.md, docs/legal/terms-of-service.md と同じプレースホルダーを使用)
-const CONTACT_EMAIL = 'xxxx@yyy.zz';
+// docs/legal/privacy-policy.md, docs/legal/terms-of-service.md の連絡先と揃える
+const CONTACT_EMAIL = 'aokick.apps@gmail.com';
 
 export const SETTINGS_SECTIONS: SettingsSection[] = [
   {

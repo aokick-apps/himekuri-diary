@@ -87,16 +87,13 @@ describe('SettingsScreen', () => {
     expect(privacyPolicy).toBeDefined();
     expect(termsOfService).toBeDefined();
 
-    // `item.href`は`SettingsMenuItem`のユニオン型全体では`string | HrefObject`のため、
-    // `.startsWith`を呼ぶには`type`で`'external'`に絞り込んでTypeScriptに文字列型だと
-    // 認識させる必要がある(絞り込まずに呼ぶと`tsc --noEmit`がコンパイルエラーになる)。
     expect(privacyPolicy?.type).toBe('external');
     if (privacyPolicy?.type === 'external') {
-      expect(privacyPolicy.href.startsWith('https://')).toBe(true);
+      expect(privacyPolicy.href).toBe('https://aokick-apps.github.io/himekuri/privacy-policy/');
     }
     expect(termsOfService?.type).toBe('external');
     if (termsOfService?.type === 'external') {
-      expect(termsOfService.href.startsWith('https://')).toBe(true);
+      expect(termsOfService.href).toBe('https://aokick-apps.github.io/himekuri/terms-of-service/');
     }
   });
 

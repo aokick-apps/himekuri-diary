@@ -23,6 +23,7 @@ export function DiaryImageAttachmentField({
   disabled?: boolean;
 }) {
   const tintColor = useThemeColor({}, 'tint');
+  const linkColor = useThemeColor({}, 'link');
   const iconColor = useThemeColor({}, 'icon');
   const errorColor = useThemeColor({}, 'error');
 
@@ -71,7 +72,7 @@ export function DiaryImageAttachmentField({
               accessibilityLabel="添付した写真を差し替える"
               accessibilityState={{ disabled }}
             >
-              <ThemedText style={[styles.actionText, { color: tintColor }]}>差し替え</ThemedText>
+              <ThemedText style={[styles.actionText, { color: linkColor }]}>差し替え</ThemedText>
             </Pressable>
             <Pressable
               onPress={() => remove(index)}
@@ -96,7 +97,7 @@ export function DiaryImageAttachmentField({
           accessibilityState={{ disabled }}
           style={[styles.addButton, { borderColor: tintColor, opacity: disabled ? 0.5 : 1 }]}
         >
-          <ThemedText style={[styles.actionText, { color: tintColor }]}>写真を添付</ThemedText>
+          <ThemedText style={[styles.actionText, { color: linkColor }]}>写真を添付</ThemedText>
         </Pressable>
       ) : null}
     </View>

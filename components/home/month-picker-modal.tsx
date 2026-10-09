@@ -29,6 +29,7 @@ export function MonthPickerModal({
 }) {
   const textColor = useThemeColor({}, 'text');
   const tintColor = useThemeColor({}, 'tint');
+  const linkColor = useThemeColor({}, 'link');
   const backgroundColor = useThemeColor({}, 'background');
   const iconColor = useThemeColor({}, 'icon');
   // 年月ピッカーモーダルのアニメーション制御(詳細はuseModalSlideTransitionを参照)
@@ -83,7 +84,7 @@ export function MonthPickerModal({
                 accessibilityRole="button"
                 accessibilityLabel="閉じる"
               >
-                <ThemedText style={[styles.modalCloseText, { color: tintColor }]}>
+                <ThemedText style={[styles.modalCloseText, { color: linkColor }]}>
                   閉じる
                 </ThemedText>
               </Pressable>

@@ -82,6 +82,7 @@ export default function HomeScreen() {
   const { layout: calendarLayout } = useCalendarLayoutPreference();
   const textColor = useThemeColor({}, 'text');
   const tintColor = useThemeColor({}, 'tint');
+  const linkColor = useThemeColor({}, 'link');
   const backgroundColor = useThemeColor({}, 'background');
   const iconColor = useThemeColor({}, 'icon');
   const errorColor = useThemeColor({}, 'error');
@@ -423,7 +424,7 @@ export default function HomeScreen() {
                     accessibilityRole="button"
                     accessibilityLabel="再試行"
                   >
-                    <ThemedText style={[styles.retryButtonText, { color: tintColor }]}>
+                    <ThemedText style={[styles.retryButtonText, { color: linkColor }]}>
                       再試行
                     </ThemedText>
                   </Pressable>

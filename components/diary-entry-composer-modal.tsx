@@ -85,6 +85,7 @@ export function DiaryEntryComposerModal({
 
   const textColor = useThemeColor({}, 'text');
   const tintColor = useThemeColor({}, 'tint');
+  const linkColor = useThemeColor({}, 'link');
   const backgroundColor = useThemeColor({}, 'background');
   const iconColor = useThemeColor({}, 'icon');
   const errorColor = useThemeColor({}, 'error');
@@ -238,7 +239,7 @@ export function DiaryEntryComposerModal({
                     accessibilityRole="button"
                     accessibilityLabel="閉じる"
                   >
-                    <ThemedText style={[styles.modalCloseText, { color: tintColor }]}>
+                    <ThemedText style={[styles.modalCloseText, { color: linkColor }]}>
                       閉じる
                     </ThemedText>
                   </Pressable>

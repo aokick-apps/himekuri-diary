@@ -7,9 +7,12 @@
 ```
 assets/
   images/
-    icon.png                          アプリアイコン
+    icon.png                           アプリアイコン（iOSライト・共通。透過なし）
+    icon-dark.png                      iOSダークモード用アイコン（透過なし）
+    icon-tinted.png                    iOSティント用アイコン（白一色。色はOSが付ける）
     favicon.png                        Web用ファビコン
-    splash-icon.png                    スプラッシュ画面用アイコン
+    splash-icon.png                    スプラッシュ画面用アイコン（ライト）
+    splash-icon-dark.png               スプラッシュ画面用アイコン（ダーク）
     android-icon-background.png        Androidアダプティブアイコン（背景）
     android-icon-foreground.png        Androidアダプティブアイコン（前景）
     android-icon-monochrome.png        Androidアダプティブアイコン（モノクロ）

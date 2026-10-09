@@ -56,6 +56,13 @@ jobs:
         run: |
           set -e
           if [ -n "$TARGET_PR" ]; then
+            target="$(gh pr view "$TARGET_PR" --repo "$REPO" --json state,baseRefName --jq '.state + " " + .baseRefName')"
+            if [ "$target" != "OPEN main" ]; then
+              echo "PR #$TARGET_PR はmain向けのオープンPRではないため対象外です($target)"
+              echo "pr_numbers=[]" >> "$GITHUB_OUTPUT"
+              echo "has_conflicts=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
             open_prs="$TARGET_PR"
           else
             open_prs="$(gh pr list --repo "$REPO" --state open --base main --json number --jq '.[].number')"

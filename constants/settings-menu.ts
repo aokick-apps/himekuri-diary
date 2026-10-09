@@ -39,7 +39,7 @@ export type SettingsSection = {
   items: SettingsMenuItem[];
 };
 
-// 原本は docs/legal/。公開サイト(aokick-apps/aokick-apps.github.io)にも同じ内容を掲載する
+// 公開ページの原本は docs/legal/。内容を変えたら https://github.com/aokick-apps/aokick-apps.github.io にも反映する
 const PRIVACY_POLICY_URL = 'https://aokick-apps.github.io/himekuri/privacy-policy/';
 const TERMS_OF_SERVICE_URL = 'https://aokick-apps.github.io/himekuri/terms-of-service/';
 

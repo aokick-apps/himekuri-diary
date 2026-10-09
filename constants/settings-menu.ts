@@ -39,11 +39,9 @@ export type SettingsSection = {
   items: SettingsMenuItem[];
 };
 
-// TODO: プライバシーポリシー・利用規約の公開URLが確定次第、
-// 以下のプレースホルダーURLを実際のHTTPS URLに差し替える
-// (GitHub Free + privateリポジトリのためGitHub Pagesが使えず、公開URL未確定)
-const PRIVACY_POLICY_URL = 'https://example.com/legal/privacy-policy';
-const TERMS_OF_SERVICE_URL = 'https://example.com/legal/terms-of-service';
+// 公開ページの原本は docs/legal/。内容を変えたら https://github.com/aokick-apps/aokick-apps.github.io にも反映する
+const PRIVACY_POLICY_URL = 'https://aokick-apps.github.io/himekuri/privacy-policy/';
+const TERMS_OF_SERVICE_URL = 'https://aokick-apps.github.io/himekuri/terms-of-service/';
 
 // docs/legal/privacy-policy.md, docs/legal/terms-of-service.md の連絡先と揃える
 const CONTACT_EMAIL = 'aokick.apps@gmail.com';

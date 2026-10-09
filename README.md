@@ -1,4 +1,4 @@
-# my-first-app（日記アプリ）
+# ひめくり日記(日記アプリ)
 
 [Expo](https://expo.dev) と [expo-router](https://docs.expo.dev/router/introduction/) を使った、シンプルな日記アプリです。
 [`create-expo-app`](https://www.npmjs.com/package/create-expo-app) で作成したテンプレートをベースに開発しています。
@@ -11,6 +11,7 @@
 - [環境構築](#環境構築)
 - [動作確認方法](#動作確認方法)
 - [開発用コマンド](#開発用コマンド)
+- [バージョニング方針](#バージョニング方針)
 - [使用技術・主要ライブラリ](#使用技術主要ライブラリ)
 - [データ構造](#データ構造)
 - [プロジェクト構成](#プロジェクト構成)
@@ -92,6 +93,12 @@
 | --- | --- |
 | [`.github/workflows/ci.yml`](./.github/workflows/ci.yml) | `npm run lint`(ESLint)・`npm run format:check`(Prettier)・`npm test`(Jest)・`npm audit --audit-level=high`(依存パッケージの脆弱性検知)を実行し、いずれかが失敗するとチェックが失敗する |
 | [`.github/workflows/semgrep.yml`](./.github/workflows/semgrep.yml) | [Semgrep](https://semgrep.dev/) OSSによるコードの静的セキュリティ解析(コミュニティルールセット `p/security-audit` `p/typescript` `p/react` を使用。無料・アカウント登録不要)。PR時・`main`へのpush時・週次スケジュールで実行する。GitHub標準のCodeQLはprivateリポジトリだとGitHub Advanced Security(有料)が必要なため採用していない |
+
+## バージョニング方針
+
+- `version`(ユーザー向けのセマンティックバージョン)は [`app.json`](./app.json) で手動管理します。
+- `ios.buildNumber` / `android.versionCode` は [`eas.json`](./eas.json) の `cli.appVersionSource: "remote"` と `production` プロファイルの `autoIncrement: true` により、EAS側で自動加算します。ストア提出ごとに単調増加させる必要があります。
+- `app.json` の `buildNumber` / `versionCode` は初期値の `1` のままにしておき、手動で書き換えません。
 
 ## 使用技術・主要ライブラリ
 

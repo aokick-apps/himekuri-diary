@@ -1,3 +1,6 @@
+import { existsSync } from 'fs';
+import { resolve } from 'path';
+
 import appJson from '../../app.json';
 import easJson from '../../eas.json';
 
@@ -15,6 +18,27 @@ describe('app.json', () => {
     expect(expo.ios.buildNumber).toBe('1');
     expect(expo.android.package).toBe('com.aokick.himekuri');
     expect(expo.android.versionCode).toBe(1);
+  });
+
+  it('iOSとAndroidの識別子が一致している', () => {
+    expect(expo.ios.bundleIdentifier).toBe(expo.android.package);
+  });
+
+  it('識別子が逆ドメイン形式である', () => {
+    expect(expo.ios.bundleIdentifier).toMatch(/^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)+$/);
+  });
+
+  it('アイコンとして参照している画像ファイルが存在する', () => {
+    const paths = [
+      expo.icon,
+      expo.ios.icon.light,
+      expo.ios.icon.dark,
+      expo.ios.icon.tinted,
+      expo.android.adaptiveIcon.foregroundImage,
+    ];
+    for (const p of paths) {
+      expect(existsSync(resolve(__dirname, '../..', p))).toBe(true);
+    }
   });
 
   it('versionがセマンティックバージョン形式である', () => {

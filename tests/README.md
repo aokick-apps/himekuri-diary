@@ -8,7 +8,9 @@
 tests/
   app/
     _layout.test.tsx      app/_layout.tsx（アプリ全体のレイアウト・オンボーディング表示制御）のテスト
-    index.test.tsx      app/(tabs)/index.tsx（日記画面）のテスト
+    home/               app/(tabs)/index.tsx（日記画面）のテストを機能ごとに分割したもの
+                        （save / draft-autosave / save-feedback / empty-state / calendar-modal /
+                        year-month-picker / day-indicators / new-entry-modal / search / week-layout など）
     settings/            app/(tabs)/settings.tsx（設定画面）のテスト。機能単位で分割（screen / delete-all / export / import / appearance / calendar-layout / reminder* / backup-images / app-lock）
     oss-licenses.test.tsx など   app/oss-licenses.tsx（OSSライセンス画面）のテスト
     day-entries/
@@ -16,9 +18,12 @@ tests/
     edit-entry/
       [id].test.tsx     app/edit-entry/[id].tsx（日記編集画面）のテスト
   helpers/
+    home-screen-mocks.ts        日記画面テスト共通のjest.mockファクトリ(各テストファイルのjest.mockから呼び出す)
+    home-screen-test-utils.tsx  日記画面テスト共通のヘルパー・定数・beforeEach/afterEach(setupHomeScreenLifecycle)
     settings-screen-mocks.ts   設定画面テスト共通のモック（ファイルシステム・通知・生体認証など）のファクトリ
     mock-diary-images.ts       diary-imagesのモック
     mock-memory-file-system.ts expo-file-systemのインメモリ実装(バックアップの読み書きテスト用)
+    その他、diary-storage・diary-reminder・app-lock向け等の共有モック・ヘルパー
   components/
     onboarding.test.tsx    components/onboarding.tsx（初回起動時のオンボーディング画面）のテスト
     save-toast.test.tsx    components/save-toast.tsx（保存成功時に表示する一時的なトースト）のテスト
@@ -27,10 +32,7 @@ tests/
   contexts/
     theme-preference-context.test.tsx   contexts/theme-preference-context.tsx（配色設定）のテスト
     diary-reminder-context*.test.tsx   contexts/diary-reminder-context.tsx（日記リマインダー通知の設定・永続化）のテスト。初期化・setEnabled・setTime・AppState復帰ごとにファイルを分割
-
     app-lock-context*.test.tsx   contexts/app-lock-context.tsx（アプリロックのON/OFF設定・永続化・background遷移時の再ロック）のテスト。初期化・自動認証・AppState遷移ごとにファイルを分割
-  helpers/
-    複数のテストファイルで共有するモック・ヘルパー（diary-storage・diary-reminder・app-lock向け等）
   utils/
     diary-encryption.test.ts   utils/diary-encryption.ts（日記データの暗号化・復号）のテスト
     diary-storage.test.ts      utils/diary-storage.ts（全件削除・保存・削除・単体取得・型ガード）のテスト
@@ -74,7 +76,7 @@ npm test
 - `expo-crypto`: Node標準の `crypto` モジュール（`crypto.randomBytes` / `crypto.randomUUID`）で代替し、実際に乱数として振る舞うようにする。
 - `expo-secure-store`: インメモリの `Record<string, string>` で `getItemAsync` / `setItemAsync` / `deleteItemAsync` を実装し、テスト間の状態分離のための `__reset()` ヘルパーを追加する。
 
-具体的な実装は [tests/utils/diary-encryption.test.ts](utils/diary-encryption.test.ts) と [tests/app/index.test.tsx](app/index.test.tsx) を参照してください。
+具体的な実装は [tests/utils/diary-encryption.test.ts](utils/diary-encryption.test.ts) と [tests/app/home/save.test.tsx](app/home/save.test.tsx) を参照してください。
 
 ### expo-notifications のモックについて
 

@@ -15,3 +15,7 @@ beforeEach(() => {
     fn.mockImplementation(asyncStorageInitialImplementations.get(name));
   }
 });
+
+// CIや並列実行でCPUが混み合うと初回描画・読み込みの待ち合わせが既定の1秒を超えて不安定に落ちるため、
+// waitFor/findBy*の待機上限を延ばす(テスト全体のタイムアウトはpackage.jsonのtestTimeoutで別途延長)
+require('@testing-library/react-native').configure({ asyncUtilTimeout: 5000 });

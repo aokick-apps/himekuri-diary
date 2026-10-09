@@ -25,10 +25,17 @@ Notifications.setNotificationHandler({
   }),
 });
 
+// Android 13以降は未リクエストでも'denied'かつcanAskAgain: trueが返るため、未確認として扱う
+function normalizePermissionStatus({
+  status,
+  canAskAgain,
+}: Notifications.NotificationPermissionsStatus): ReminderPermissionStatus {
+  return status === 'denied' && canAskAgain === true ? 'undetermined' : status;
+}
+
 /** 現在の通知許可状態を、OSの確認ダイアログを表示せずに取得する。 */
 export async function getReminderPermissionStatusAsync(): Promise<ReminderPermissionStatus> {
-  const { status } = await Notifications.getPermissionsAsync();
-  return status;
+  return normalizePermissionStatus(await Notifications.getPermissionsAsync());
 }
 
 /**
@@ -36,8 +43,7 @@ export async function getReminderPermissionStatusAsync(): Promise<ReminderPermis
  * 一度「拒否」された後はOSによってはダイアログ自体が再表示されず即座に'denied'が返る。
  */
 export async function requestReminderPermissionAsync(): Promise<ReminderPermissionStatus> {
-  const { status } = await Notifications.requestPermissionsAsync();
-  return status;
+  return normalizePermissionStatus(await Notifications.requestPermissionsAsync());
 }
 
 /**

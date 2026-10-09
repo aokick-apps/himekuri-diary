@@ -51,6 +51,24 @@ describe('DiaryReminderProvider / useDiaryReminder', () => {
       );
     });
 
+    it('requests permission when turned ON while the status is undetermined because Android can still ask again (正常系: Androidの未リクエスト状態からON)', async () => {
+      mockedNotificationsUtil.getReminderPermissionStatusAsync.mockResolvedValue('undetermined');
+      mockedNotificationsUtil.requestReminderPermissionAsync.mockResolvedValue('undetermined');
+      const { result } = renderHook(() => useDiaryReminder(), { wrapper });
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      await act(async () => {
+        await result.current.setEnabled(true);
+      });
+
+      expect(mockedNotificationsUtil.requestReminderPermissionAsync).toHaveBeenCalledTimes(1);
+      expect(result.current.enabled).toBe(false);
+      expect(result.current.permissionStatus).toBe('undetermined');
+      expect(mockedNotificationsUtil.scheduleDailyReminderAsync).not.toHaveBeenCalled();
+    });
+
     it('does not schedule anything and keeps enabled=false when the permission is denied by the user (異常系: ON・未確認から拒否)', async () => {
       mockedNotificationsUtil.getReminderPermissionStatusAsync.mockResolvedValue('undetermined');
       mockedNotificationsUtil.requestReminderPermissionAsync.mockResolvedValue('denied');

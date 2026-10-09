@@ -120,10 +120,11 @@ export function DiaryReminderProvider({ children }: PropsWithChildren) {
       }
     };
 
-    const correctIfPermissionDenied = (): boolean => {
+    const correctIfPermissionRevoked = (): boolean => {
       if (
         loadedSettings === null ||
-        loadedPermissionStatus !== 'denied' ||
+        loadedPermissionStatus === null ||
+        loadedPermissionStatus === 'granted' ||
         !loadedSettings.enabled
       ) {
         return false;
@@ -146,7 +147,7 @@ export function DiaryReminderProvider({ children }: PropsWithChildren) {
           return;
         }
         loadedSettings = parsed;
-        if (!correctIfPermissionDenied()) {
+        if (!correctIfPermissionRevoked()) {
           setSettings(parsed);
         }
       })
@@ -162,7 +163,7 @@ export function DiaryReminderProvider({ children }: PropsWithChildren) {
         }
         setPermissionStatus(status);
         loadedPermissionStatus = status;
-        correctIfPermissionDenied();
+        correctIfPermissionRevoked();
       })
       .catch(() => {
         // 取得に失敗した場合は「未確認」のまま扱う
@@ -189,7 +190,7 @@ export function DiaryReminderProvider({ children }: PropsWithChildren) {
           const previousStatus = permissionStatusRef.current;
           setPermissionStatus(status);
 
-          if (previousStatus === 'granted' && status === 'denied') {
+          if (previousStatus === 'granted' && status !== 'granted') {
             // 許可が取り消されたことを検知した場合のみ、スイッチの見た目と実際のスケジュール
             // 登録状況を一致させるためenabledをOFFへ戻す(denied→granted等の変化では
             // ユーザーの明示的な操作なしにenabledを自動でONへは戻さない)

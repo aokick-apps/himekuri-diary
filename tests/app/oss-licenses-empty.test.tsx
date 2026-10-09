@@ -52,4 +52,11 @@ describe('OssLicensesScreen (異常系: ライセンス一覧が空の場合)', 
     // 1件も存在しないことで、リスト項目が描画されていないことを確認する。
     expect(screen.queryAllByText(/^v.+ ・ /)).toHaveLength(0);
   });
+
+  it('shows a total of 0 and no empty-search message before any query is typed', () => {
+    render(<OssLicensesScreen />);
+
+    expect(screen.getByText('全0件')).toBeTruthy();
+    expect(screen.queryByText('該当するパッケージがありません')).toBeNull();
+  });
 });

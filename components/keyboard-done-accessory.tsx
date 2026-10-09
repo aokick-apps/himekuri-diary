@@ -6,7 +6,8 @@ import { useThemeColor } from '@/hooks/use-theme-color';
 // iOSの複数行入力欄のキーボードには閉じるキーが無いため、キーボードの上に「完了」ボタンを表示する。
 // 入力欄側の`inputAccessoryViewID`に同じ`nativeID`を指定して紐付ける(Androidは端末の戻る操作で閉じられる)
 export function KeyboardDoneAccessory({ nativeID }: { nativeID: string }) {
-  const tintColor = useThemeColor({}, 'tint');
+  // ダークのtintは本文と同色で操作要素と判別しづらいため、リンク用のアクセント色を使う
+  const accentColor = useThemeColor({}, 'link');
   const backgroundColor = useThemeColor({}, 'background');
   const iconColor = useThemeColor({}, 'icon');
 
@@ -24,7 +25,7 @@ export function KeyboardDoneAccessory({ nativeID }: { nativeID: string }) {
           accessibilityLabel="キーボードを閉じる"
           style={styles.button}
         >
-          <ThemedText style={[styles.buttonText, { color: tintColor }]}>完了</ThemedText>
+          <ThemedText style={[styles.buttonText, { color: accentColor }]}>完了</ThemedText>
         </Pressable>
       </View>
     </InputAccessoryView>

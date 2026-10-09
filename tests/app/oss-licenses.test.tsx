@@ -1,7 +1,7 @@
-import { render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import type { PropsWithChildren } from 'react';
 import React from 'react';
-import { FlatList } from 'react-native';
+import { AccessibilityInfo, FlatList, StyleSheet, TextInput } from 'react-native';
 
 import OssLicensesScreen from '@/app/oss-licenses';
 import licenses from '@/data/licenses.json';
@@ -114,5 +114,106 @@ describe('OssLicensesScreen (実データ: data/licenses.json)', () => {
 
     const names = licenseEntries.map((entry) => entry.name);
     expect(names).toEqual(expect.arrayContaining(['expo', 'react', 'react-native', 'expo-router']));
+  });
+});
+
+describe('OssLicensesScreen (件数表示と検索)', () => {
+  it('shows the total number of packages', () => {
+    render(<OssLicensesScreen />);
+
+    expect(screen.getByText(`全${licenseEntries.length}件`)).toBeTruthy();
+  });
+
+  it('filters the list by a case-insensitive partial match on the package name and shows the hit count', () => {
+    render(<OssLicensesScreen />);
+
+    fireEvent.changeText(screen.getByLabelText('パッケージ名で検索'), 'EXPO-ROUTER');
+
+    const expected = licenseEntries.filter((entry) => entry.name.includes('expo-router'));
+    expect(expected.length).toBeGreaterThan(0);
+    expect(screen.UNSAFE_getByType(FlatList).props.data).toEqual(expected);
+    expect(screen.getByText(`${expected.length}件 / 全${licenseEntries.length}件`)).toBeTruthy();
+  });
+
+  it('ignores surrounding whitespace in the query', () => {
+    render(<OssLicensesScreen />);
+
+    fireEvent.changeText(screen.getByLabelText('パッケージ名で検索'), '  react-native  ');
+
+    const data = screen.UNSAFE_getByType(FlatList).props.data as LicenseEntry[];
+    expect(data.length).toBeGreaterThan(0);
+    expect(data.every((entry) => entry.name.includes('react-native'))).toBe(true);
+  });
+
+  it('shows an empty message when nothing matches, and restores the full list when cleared', () => {
+    render(<OssLicensesScreen />);
+    const input = screen.getByLabelText('パッケージ名で検索');
+
+    fireEvent.changeText(input, 'zzz-no-such-package');
+    expect(screen.getByText('該当するパッケージがありません')).toBeTruthy();
+    expect(screen.getByText(`0件 / 全${licenseEntries.length}件`)).toBeTruthy();
+
+    fireEvent.changeText(input, '');
+    expect(screen.queryByText('該当するパッケージがありません')).toBeNull();
+    expect(screen.UNSAFE_getByType(FlatList).props.data).toEqual(licenseEntries);
+  });
+
+  it('keeps the search input at least 44pt tall', () => {
+    render(<OssLicensesScreen />);
+
+    const style = StyleSheet.flatten(screen.UNSAFE_getByType(TextInput).props.style);
+    expect(style.minHeight).toBeGreaterThanOrEqual(44);
+  });
+
+  describe('件数の読み上げ', () => {
+    let announceSpy: jest.SpyInstance;
+
+    beforeEach(() => {
+      jest.useFakeTimers();
+      announceSpy = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation();
+      announceSpy.mockClear();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+      jest.restoreAllMocks();
+    });
+
+    it('announces the hit count once after typing stops, not on every keystroke', () => {
+      render(<OssLicensesScreen />);
+      const input = screen.getByLabelText('パッケージ名で検索');
+
+      fireEvent.changeText(input, 'e');
+      act(() => jest.advanceTimersByTime(300));
+      fireEvent.changeText(input, 'expo-router');
+      expect(announceSpy).not.toHaveBeenCalled();
+      act(() => jest.advanceTimersByTime(500));
+
+      const hits = licenseEntries.filter((entry) => entry.name.includes('expo-router')).length;
+      expect(announceSpy).toHaveBeenCalledTimes(1);
+      expect(announceSpy).toHaveBeenCalledWith(`${hits}件 / 全${licenseEntries.length}件`);
+    });
+
+    it('does not announce when no query is entered or after the query is cleared', () => {
+      render(<OssLicensesScreen />);
+      act(() => jest.advanceTimersByTime(1000));
+      expect(announceSpy).not.toHaveBeenCalled();
+
+      const input = screen.getByLabelText('パッケージ名で検索');
+      fireEvent.changeText(input, 'expo');
+      fireEvent.changeText(input, '');
+      act(() => jest.advanceTimersByTime(1000));
+      expect(announceSpy).not.toHaveBeenCalled();
+    });
+
+    it('cancels the pending announcement when unmounted', () => {
+      const view = render(<OssLicensesScreen />);
+      fireEvent.changeText(screen.getByLabelText('パッケージ名で検索'), 'expo');
+
+      view.unmount();
+      act(() => jest.advanceTimersByTime(1000));
+
+      expect(announceSpy).not.toHaveBeenCalled();
+    });
   });
 });

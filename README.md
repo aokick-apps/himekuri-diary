@@ -98,6 +98,7 @@
 
 - `version`(ユーザー向けのセマンティックバージョン)は [`app.json`](./app.json) で手動管理します。
 - `ios.buildNumber` / `android.versionCode` は [`eas.json`](./eas.json) の `cli.appVersionSource: "remote"` と `production` プロファイルの `autoIncrement: true` により、EAS側で自動加算します。ストア提出ごとに単調増加させる必要があります。
+- iOSの `aps-environment`（Push Notifications capability）は、ローカルプラグイン [`plugins/with-remove-push-entitlement.js`](./plugins/with-remove-push-entitlement.js) で entitlements から取り除いています（`expo-notifications` のプラグインが無条件で追加するため）。`app.json` の `plugins` では `expo-notifications` より前に置く必要があります（mod は後に登録したものから先に実行されるため）。サーバーからのプッシュ通知を使う場合はこのプラグインを外してください。
 - `app.json` の `buildNumber` / `versionCode` は初期値の `1` のままにしておき、手動で書き換えません。
 
 ## 使用技術・主要ライブラリ

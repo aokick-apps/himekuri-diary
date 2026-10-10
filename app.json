@@ -49,6 +49,7 @@
         }
       ],
       "expo-secure-store",
+      "./plugins/with-remove-push-entitlement.js",
       "expo-notifications",
       [
         "expo-local-authentication",

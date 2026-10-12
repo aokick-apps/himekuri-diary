@@ -89,4 +89,71 @@ describe('useEntryHighlight', () => {
     jest.advanceTimersByTime(100);
     expect(list.scrollToIndex).not.toHaveBeenCalled();
   });
+  it('does not highlight while entries are not loaded yet (境界値)', () => {
+    const { result } = renderHook(() => useEntryHighlight(entries, false, 'a'));
+    expect(result.current.highlightedEntryId).toBeNull();
+  });
+
+  it('does not highlight when no target id is given (境界値)', () => {
+    const { result } = renderHook(() => useEntryHighlight(entries, true, undefined));
+    expect(result.current.highlightedEntryId).toBeNull();
+  });
+
+  it('highlights once the target entry appears in a later entries update (正常系)', () => {
+    const { result, rerender } = renderHook(
+      ({ list }: { list: DiaryEntry[] }) => useEntryHighlight(list, true, 'b'),
+      { initialProps: { list: [entries[0]] } },
+    );
+    expect(result.current.highlightedEntryId).toBeNull();
+    rerender({ list: entries });
+    expect(result.current.highlightedEntryId).toBe('b');
+  });
+
+  it('highlights a new target id after the previous one was applied (正常系)', () => {
+    const { result, rerender } = renderHook(
+      ({ id }: { id: string }) => useEntryHighlight(entries, true, id),
+      { initialProps: { id: 'a' } },
+    );
+    expect(result.current.highlightedEntryId).toBe('a');
+    rerender({ id: 'b' });
+    expect(result.current.highlightedEntryId).toBe('b');
+  });
+
+  it('keeps the highlight until just before the duration elapses (境界値)', () => {
+    const { result } = renderHook(() => useEntryHighlight(entries, true, 'a'));
+    act(() => {
+      jest.advanceTimersByTime(HIGHLIGHT_DURATION_MS - 1);
+    });
+    expect(result.current.highlightedEntryId).toBe('a');
+    act(() => {
+      jest.advanceTimersByTime(1);
+    });
+    expect(result.current.highlightedEntryId).toBeNull();
+  });
+
+  it('does not throw when the list ref is not attached (異常系)', () => {
+    const { result } = renderHook(() => useEntryHighlight(entries, true, 'a'));
+    expect(result.current.highlightedEntryId).toBe('a');
+    act(() => {
+      result.current.handleScrollToIndexFailed({ index: 1, averageItemLength: 10 });
+      jest.advanceTimersByTime(100);
+    });
+  });
+
+  it('keeps only the latest retry when scroll fails repeatedly (境界値)', () => {
+    const { result } = renderHook(() => useEntryHighlight(entries, true, undefined));
+    const list = attachList(result);
+    act(() => {
+      result.current.handleScrollToIndexFailed({ index: 1, averageItemLength: 10 });
+      jest.advanceTimersByTime(99);
+      result.current.handleScrollToIndexFailed({ index: 2, averageItemLength: 10 });
+      jest.advanceTimersByTime(100);
+    });
+    expect(list.scrollToIndex).toHaveBeenCalledTimes(1);
+    expect(list.scrollToIndex).toHaveBeenCalledWith({
+      index: 2,
+      animated: true,
+      viewPosition: 0.2,
+    });
+  });
 });

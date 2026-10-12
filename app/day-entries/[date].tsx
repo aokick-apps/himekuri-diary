@@ -1,26 +1,26 @@
 import * as Clipboard from 'expo-clipboard';
 import { randomUUID } from 'expo-crypto';
-import * as Haptics from 'expo-haptics';
 import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, FlatList, Pressable, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { DayEntriesEmptyState } from '@/components/day-entries-empty-state';
 import { DayEntryItem } from '@/components/day-entry-item';
 import { DiaryEntryComposerModal } from '@/components/diary-entry-composer-modal';
 import { SaveToast } from '@/components/save-toast';
-import { ThemedText } from '@/components/themed-text';
 import { ThemedView } from '@/components/themed-view';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { SAVE_SUCCESS_MESSAGE } from '@/constants/diary-messages';
+import { useEntryHighlight } from '@/hooks/use-entry-highlight';
 import { useThemeColor } from '@/hooks/use-theme-color';
 import { buildCreatedAtForDateKeyAtTime, formatDateHeading, toDateKey } from '@/utils/diary-date';
 import { DIARY_DAY_ENTRIES_NEW_ENTRY_DRAFT_STORAGE_KEY_PREFIX } from '@/utils/diary-draft-storage';
 import { deleteDiaryImages } from '@/utils/diary-images';
+import { notifySaveSuccessHaptics } from '@/utils/save-feedback';
 import {
   buildDiaryPartialCorruptionMessage,
   deleteDiaryEntry,
-  DIARY_LOAD_ERROR_MESSAGE,
   getAllDiaryEntries,
   saveDiaryEntry,
   type DiaryEntry,
@@ -28,7 +28,6 @@ import {
 } from '@/utils/diary-storage';
 
 const COPY_SUCCESS_MESSAGE = 'コピーしました';
-const EMPTY_STATE_MESSAGE = 'この日の日記はまだありません';
 const DELETE_UNDO_DELAY_MS = 5000;
 
 function sortEntriesByCreatedAt(entries: DiaryEntry[]): DiaryEntry[] {
@@ -37,12 +36,6 @@ function sortEntriesByCreatedAt(entries: DiaryEntry[]): DiaryEntry[] {
     return timeDifference !== 0 ? timeDifference : a.id.localeCompare(b.id);
   });
 }
-
-// 検索結果から遷移した日記を強調表示しておく時間(ミリ秒)
-const HIGHLIGHT_DURATION_MS = 4000;
-// 強調する日記を画面のどの高さに表示するか(0: 上端〜1: 下端)。直前の日記も少し見えるようにする
-const HIGHLIGHT_VIEW_POSITION = 0.2;
-const SCROLL_RETRY_DELAY_MS = 100;
 
 // 指定した日付('YYYY-MM-DD')の日記一覧を表示する専用画面。
 // カレンダー画面のモーダルではなく独立した画面にすることで、削除時のフェードアウトや
@@ -75,15 +68,13 @@ export default function DayEntriesScreen() {
   const loadRequestIdRef = useRef(0);
   activeDateRef.current = date;
   const [isComposerOpen, setIsComposerOpen] = useState(false);
-  const listRef = useRef<FlatList<DiaryEntry>>(null);
-  // 検索結果から遷移してきた場合に強調表示中の日記。同じ遷移で何度も強調し直さないよう適用済みのidも持つ
-  const [highlightedEntryId, setHighlightedEntryId] = useState<string | null>(null);
-  const appliedHighlightEntryIdRef = useRef<string | null>(null);
-  const scrollRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { listRef, highlightedEntryId, handleScrollToIndexFailed } = useEntryHighlight(
+    entries,
+    hasLoadedEntries,
+    highlightEntryId,
+  );
 
   const tintColor = useThemeColor({}, 'tint');
-  const linkColor = useThemeColor({}, 'link');
-  const errorColor = useThemeColor({}, 'error');
   // この画面はタブバーを持たないため、セーフエリア下端ぶんのみモーダルコンテンツの下端に加算する
   const insets = useSafeAreaInsets();
 
@@ -100,62 +91,8 @@ export default function DayEntriesScreen() {
     return () => {
       isMountedRef.current = false;
       expirePendingDeletedEntries();
-      if (scrollRetryTimerRef.current !== null) {
-        clearTimeout(scrollRetryTimerRef.current);
-      }
     };
   }, [expirePendingDeletedEntries]);
-
-  useEffect(() => {
-    if (
-      !hasLoadedEntries ||
-      !highlightEntryId ||
-      appliedHighlightEntryIdRef.current === highlightEntryId
-    ) {
-      return;
-    }
-    const index = entries.findIndex((entry) => entry.id === highlightEntryId);
-    if (index === -1) {
-      return;
-    }
-    appliedHighlightEntryIdRef.current = highlightEntryId;
-    setHighlightedEntryId(highlightEntryId);
-    listRef.current?.scrollToIndex({
-      index,
-      animated: true,
-      viewPosition: HIGHLIGHT_VIEW_POSITION,
-    });
-  }, [hasLoadedEntries, entries, highlightEntryId]);
-
-  useEffect(() => {
-    if (highlightedEntryId === null) {
-      return;
-    }
-    const timer = setTimeout(() => setHighlightedEntryId(null), HIGHLIGHT_DURATION_MS);
-    return () => clearTimeout(timer);
-  }, [highlightedEntryId]);
-
-  // 未描画の位置へのscrollToIndexは失敗するため、平均の高さから近くまで移動して描画させてから再試行する
-  const handleScrollToIndexFailed = useCallback(
-    (info: { index: number; averageItemLength: number }) => {
-      listRef.current?.scrollToOffset({
-        offset: info.averageItemLength * info.index,
-        animated: false,
-      });
-      if (scrollRetryTimerRef.current !== null) {
-        clearTimeout(scrollRetryTimerRef.current);
-      }
-      scrollRetryTimerRef.current = setTimeout(() => {
-        scrollRetryTimerRef.current = null;
-        listRef.current?.scrollToIndex({
-          index: info.index,
-          animated: true,
-          viewPosition: HIGHLIGHT_VIEW_POSITION,
-        });
-      }, SCROLL_RETRY_DELAY_MS);
-    },
-    [],
-  );
 
   useEffect(() => {
     if (previousDateRef.current !== date) {
@@ -264,9 +201,7 @@ export default function DayEntriesScreen() {
   const handleComposerSaved = useCallback(() => {
     setIsComposerOpen(false);
     setSaveToastMessage(SAVE_SUCCESS_MESSAGE);
-    if (process.env.EXPO_OS === 'ios') {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    }
+    notifySaveSuccessHaptics();
   }, []);
 
   const handleHideCopyToast = useCallback(() => {
@@ -412,30 +347,9 @@ export default function DayEntriesScreen() {
   const renderEmptyEntries = useCallback(
     () =>
       hasLoadedEntries ? (
-        <ThemedView style={styles.emptyState}>
-          {hasLoadError ? (
-            // emptyStateTextのopacityはコントラストを下げるため、エラー表示には適用しない
-            <>
-              <ThemedText style={[styles.emptyStateErrorText, { color: errorColor }]}>
-                {DIARY_LOAD_ERROR_MESSAGE}
-              </ThemedText>
-              <Pressable
-                onPress={loadEntries}
-                style={[styles.retryButton, { borderColor: tintColor }]}
-                accessibilityRole="button"
-                accessibilityLabel="再試行"
-              >
-                <ThemedText style={[styles.retryButtonText, { color: linkColor }]}>
-                  再試行
-                </ThemedText>
-              </Pressable>
-            </>
-          ) : (
-            <ThemedText style={styles.emptyStateText}>{EMPTY_STATE_MESSAGE}</ThemedText>
-          )}
-        </ThemedView>
+        <DayEntriesEmptyState hasLoadError={hasLoadError} onRetry={loadEntries} />
       ) : null,
-    [hasLoadedEntries, hasLoadError, errorColor, tintColor, linkColor, loadEntries],
+    [hasLoadedEntries, hasLoadError, loadEntries],
   );
 
   return (
@@ -509,33 +423,5 @@ const styles = StyleSheet.create({
   listContent: {
     flexGrow: 1,
     padding: 16,
-  },
-  emptyState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 32,
-    gap: 12,
-  },
-  emptyStateText: {
-    fontSize: 16,
-    fontWeight: '600',
-    opacity: 0.7,
-    textAlign: 'center',
-  },
-  // エラー表示はコントラスト確保のためemptyStateTextのopacityを継承しない
-  emptyStateErrorText: {
-    fontSize: 16,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  retryButton: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 16,
-  },
-  retryButtonText: {
-    fontWeight: '600',
   },
 });

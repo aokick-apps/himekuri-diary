@@ -82,6 +82,24 @@ describe('日記データをエクスポートボタン(データ管理セクシ
 
   const originalPlatformOS = Platform.OS;
 
+  // 確認ダイアログの「書き出す」ボタンを押して書き出しを開始する
+  function confirmExportDialog() {
+    const [, , buttons] = (Alert.alert as jest.Mock).mock.calls[0];
+    act(() => {
+      buttons.find((button: { text: string }) => button.text === '書き出す').onPress();
+    });
+  }
+
+  async function pressExportAndConfirm() {
+    await act(async () => {
+      fireEvent.press(screen.getByText(EXPORT_BUTTON_LABEL));
+    });
+    await act(async () => {
+      const [, , buttons] = (Alert.alert as jest.Mock).mock.calls[0];
+      buttons.find((button: { text: string }) => button.text === '書き出す').onPress();
+    });
+  }
+
   beforeEach(async () => {
     await AsyncStorage.clear();
     secureStoreMock.__reset();
@@ -105,13 +123,32 @@ describe('日記データをエクスポートボタン(データ管理セクシ
     expect(screen.getByText(EXPORT_BUTTON_LABEL)).toBeTruthy();
   });
 
-  it('shows an alert and does not touch the file system/sharing APIs when there are 0 diary entries (境界値: 0件)', async () => {
+  it('warns that the exported file is unencrypted plaintext before exporting, and does nothing on cancel (書き出し前の平文警告)', async () => {
     jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    await AsyncStorage.setItem(DIARY_ENTRIES_STORAGE_KEY, sampleEntriesJson);
     render(<SettingsScreen />);
 
     await act(async () => {
       fireEvent.press(screen.getByText(EXPORT_BUTTON_LABEL));
     });
+
+    expect(Alert.alert).toHaveBeenCalledWith(
+      '日記データを書き出しますか?',
+      '書き出したファイルは暗号化されない平文です。保存先・共有先に注意してください。',
+      expect.arrayContaining([
+        expect.objectContaining({ text: 'キャンセル', style: 'cancel' }),
+        expect.objectContaining({ text: '書き出す' }),
+      ]),
+    );
+    expect(mockedFileSystem.__mockWrite).not.toHaveBeenCalled();
+    expect(Sharing.shareAsync).not.toHaveBeenCalled();
+  });
+
+  it('shows an alert and does not touch the file system/sharing APIs when there are 0 diary entries (境界値: 0件)', async () => {
+    jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    render(<SettingsScreen />);
+
+    await pressExportAndConfirm();
 
     await waitFor(() =>
       expect(Alert.alert).toHaveBeenCalledWith(
@@ -132,9 +169,7 @@ describe('日記データをエクスポートボタン(データ管理セクシ
     await AsyncStorage.setItem(DIARY_ENTRIES_STORAGE_KEY, 'not valid json');
     render(<SettingsScreen />);
 
-    await act(async () => {
-      fireEvent.press(screen.getByText(EXPORT_BUTTON_LABEL));
-    });
+    await pressExportAndConfirm();
 
     await waitFor(() =>
       expect(Alert.alert).toHaveBeenCalledWith(
@@ -158,9 +193,7 @@ describe('日記データをエクスポートボタン(データ管理セクシ
     await AsyncStorage.setItem(DIARY_ENTRIES_STORAGE_KEY, 'not valid json');
     render(<SettingsScreen />);
 
-    await act(async () => {
-      fireEvent.press(screen.getByText(EXPORT_BUTTON_LABEL));
-    });
+    await pressExportAndConfirm();
     await waitFor(() =>
       expect(Alert.alert).toHaveBeenCalledWith(
         '日記データを読み込めませんでした',
@@ -171,7 +204,7 @@ describe('日記データをエクスポートボタン(データ管理セクシ
 
     // 壊れていたレガシーデータを正常な内容に差し替え、再試行時には読み込めるようにする
     await AsyncStorage.setItem(DIARY_ENTRIES_STORAGE_KEY, sampleEntriesJson);
-    const [, , buttons] = (Alert.alert as jest.Mock).mock.calls[0];
+    const [, , buttons] = (Alert.alert as jest.Mock).mock.calls[1];
     const retryButton = buttons.find((button: { text: string }) => button.text === '再試行');
 
     await act(async () => {
@@ -191,9 +224,7 @@ describe('日記データをエクスポートボタン(データ管理セクシ
     await AsyncStorage.setItem(buildDiaryEntryKey('broken'), 'not valid json');
     render(<SettingsScreen />);
 
-    await act(async () => {
-      fireEvent.press(screen.getByText(EXPORT_BUTTON_LABEL));
-    });
+    await pressExportAndConfirm();
 
     await waitFor(() => expect(mockedFileSystem.__mockWrite).toHaveBeenCalledTimes(1));
     const [, writtenContent] = mockedFileSystem.__mockWrite.mock.calls[0];
@@ -213,9 +244,7 @@ describe('日記データをエクスポートボタン(データ管理セクシ
     await AsyncStorage.setItem(DIARY_ENTRIES_STORAGE_KEY, sampleEntriesJson);
     render(<SettingsScreen />);
 
-    await act(async () => {
-      fireEvent.press(screen.getByText(EXPORT_BUTTON_LABEL));
-    });
+    await pressExportAndConfirm();
 
     await waitFor(() => expect(mockedFileSystem.__mockWrite).toHaveBeenCalledTimes(1));
     const [fileUri, writtenContent] = mockedFileSystem.__mockWrite.mock.calls[0];
@@ -230,7 +259,7 @@ describe('日記データをエクスポートボタン(データ管理セクシ
       UTI: 'public.json',
     });
 
-    expect(Alert.alert).not.toHaveBeenCalled();
+    expect(Alert.alert).toHaveBeenCalledTimes(1);
   });
 
   it('shows an alert and does not call shareAsync when sharing is unavailable on the device (異常系)', async () => {
@@ -239,9 +268,7 @@ describe('日記データをエクスポートボタン(データ管理セクシ
     (Sharing.isAvailableAsync as jest.Mock).mockResolvedValue(false);
     render(<SettingsScreen />);
 
-    await act(async () => {
-      fireEvent.press(screen.getByText(EXPORT_BUTTON_LABEL));
-    });
+    await pressExportAndConfirm();
 
     await waitFor(() =>
       expect(Alert.alert).toHaveBeenCalledWith(
@@ -260,9 +287,7 @@ describe('日記データをエクスポートボタン(データ管理セクシ
     });
     render(<SettingsScreen />);
 
-    await act(async () => {
-      fireEvent.press(screen.getByText(EXPORT_BUTTON_LABEL));
-    });
+    await pressExportAndConfirm();
 
     await waitFor(() =>
       expect(Alert.alert).toHaveBeenCalledWith(
@@ -279,9 +304,7 @@ describe('日記データをエクスポートボタン(データ管理セクシ
     (Sharing.shareAsync as jest.Mock).mockRejectedValue(new Error('share cancelled'));
     render(<SettingsScreen />);
 
-    await act(async () => {
-      fireEvent.press(screen.getByText(EXPORT_BUTTON_LABEL));
-    });
+    await pressExportAndConfirm();
 
     await waitFor(() =>
       expect(Alert.alert).toHaveBeenCalledWith(
@@ -307,6 +330,7 @@ describe('日記データをエクスポートボタン(データ管理セクシ
     render(<SettingsScreen />);
 
     fireEvent.press(screen.getByText(EXPORT_BUTTON_LABEL));
+    confirmExportDialog();
 
     const buttonWhileExporting = screen.getByRole('button', { name: EXPORT_BUTTON_LABEL });
     expect(StyleSheet.flatten(buttonWhileExporting.props.style).opacity).toBe(0.5);
@@ -340,6 +364,7 @@ describe('日記データをエクスポートボタン(データ管理セクシ
     expect(screen.queryByText('エクスポート中...')).toBeNull();
 
     fireEvent.press(screen.getByText(EXPORT_BUTTON_LABEL));
+    confirmExportDialog();
 
     const button = screen.getByRole('button', { name: EXPORT_BUTTON_LABEL });
     expect(within(button).getByText('エクスポート中...')).toBeTruthy();
@@ -363,9 +388,7 @@ describe('日記データをエクスポートボタン(データ管理セクシ
     mockedFileSystem.__mockState.cacheDirectoryUri = null;
     render(<SettingsScreen />);
 
-    await act(async () => {
-      fireEvent.press(screen.getByText(EXPORT_BUTTON_LABEL));
-    });
+    await pressExportAndConfirm();
 
     await waitFor(() =>
       expect(Alert.alert).toHaveBeenCalledWith(

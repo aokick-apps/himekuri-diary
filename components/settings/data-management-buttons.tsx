@@ -178,9 +178,26 @@ export function ExportDiaryDataButton() {
     handleExportRef.current = handleExport;
   }, [handleExport]);
 
+  const handlePress = useCallback(() => {
+    // 書き出したファイルは暗号化されない平文のため、保存先・共有先への注意を事前に促す。
+    // react-native-webのAlert.alertは何も表示しないため、Webでは確認を挟まず直接実行する
+    if (Platform.OS === 'web') {
+      void handleExport();
+      return;
+    }
+    Alert.alert(
+      '日記データを書き出しますか?',
+      '書き出したファイルは暗号化されない平文です。保存先・共有先に注意してください。',
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        { text: '書き出す', onPress: () => void handleExport() },
+      ],
+    );
+  }, [handleExport]);
+
   return (
     <Pressable
-      onPress={handleExport}
+      onPress={handlePress}
       disabled={isExporting}
       accessibilityRole="button"
       accessibilityLabel="日記データをエクスポート"

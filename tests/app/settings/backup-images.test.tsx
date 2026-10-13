@@ -136,6 +136,7 @@ describe('添付写真を含む日記データのエクスポート/インポー
     await act(async () => {
       fireEvent.press(screen.getByText('日記データをエクスポート'));
     });
+    await pressAlertButton('書き出す');
 
     await waitFor(() => expect(Sharing.shareAsync).toHaveBeenCalledTimes(1));
     const sharedUri = (Sharing.shareAsync as jest.Mock).mock.calls[0][0] as string;
@@ -161,6 +162,7 @@ describe('添付写真を含む日記データのエクスポート/インポー
     await act(async () => {
       fireEvent.press(screen.getByText('日記データをエクスポート'));
     });
+    await pressAlertButton('書き出す');
 
     await waitFor(() => expect(Sharing.shareAsync).toHaveBeenCalledTimes(1));
     const sharedUri = (Sharing.shareAsync as jest.Mock).mock.calls[0][0] as string;

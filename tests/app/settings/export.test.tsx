@@ -144,6 +144,27 @@ describe('日記データをエクスポートボタン(データ管理セクシ
     expect(Sharing.shareAsync).not.toHaveBeenCalled();
   });
 
+  it('does not read or export anything when the user presses cancel in the plaintext warning (キャンセル)', async () => {
+    jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    await AsyncStorage.setItem(DIARY_ENTRIES_STORAGE_KEY, sampleEntriesJson);
+    render(<SettingsScreen />);
+
+    await act(async () => {
+      fireEvent.press(screen.getByText(EXPORT_BUTTON_LABEL));
+    });
+    const [, , buttons] = (Alert.alert as jest.Mock).mock.calls[0];
+    const cancelButton = buttons.find((button: { text: string }) => button.text === 'キャンセル');
+    await act(async () => {
+      cancelButton.onPress?.();
+    });
+
+    expect(Alert.alert).toHaveBeenCalledTimes(1);
+    expect(mockedFileSystem.__mockWrite).not.toHaveBeenCalled();
+    expect(Sharing.isAvailableAsync).not.toHaveBeenCalled();
+    expect(Sharing.shareAsync).not.toHaveBeenCalled();
+    expect(screen.queryByText('エクスポート中...')).toBeNull();
+  });
+
   it('shows an alert and does not touch the file system/sharing APIs when there are 0 diary entries (境界値: 0件)', async () => {
     jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     render(<SettingsScreen />);

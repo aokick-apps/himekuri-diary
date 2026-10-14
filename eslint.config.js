@@ -9,7 +9,7 @@ module.exports = defineConfig([
   // Prettierと競合するスタイル系ルールを無効化する(必ず最後に置く)
   prettierConfig,
   {
-    ignores: ['dist/*'],
+    ignores: ['dist/*', '.claude/worktrees/**'],
   },
   {
     // scripts/配下はNode.js(CommonJS)で実行するスクリプトのため、__dirnameやrequire等の

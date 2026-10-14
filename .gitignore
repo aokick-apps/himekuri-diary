@@ -57,3 +57,4 @@ app-example
 !.claude/agents/*.md
 !.claude/settings.json
 .claude/settings.local.json
+.claude/worktrees/

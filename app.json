@@ -12,6 +12,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.aokick.himekuri",
       "buildNumber": "1",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      },
       "icon": {
         "light": "./assets/images/icon.png",
         "dark": "./assets/images/icon-dark.png",

@@ -54,6 +54,7 @@ App Store / Google Play への申請に必要なアセットと申請フォー�
 - [x] `version`: 1.0.0、`ios.buildNumber`: 1、`android.versionCode`: 1(提出のたびに増やす)
 - [x] `eas.json` あり
 - [x] iOS の `aps-environment` はプラグインで除去済み(プッシュ通知は未使用)
+- [x] iOS の `ITSAppUsesNonExemptEncryption`: `false`(根拠は 3.3)
 
 ## 2. Google Play「データセーフティ」記載案
 
@@ -99,8 +100,37 @@ App Store / Google Play への申請に必要なアセットと申請フォー�
 
 - [x] 追跡(ATT): `NSUserTrackingUsageDescription` は不要(`app.json` に未設定)
 - [x] 権限説明文: Face ID(`expo-local-authentication` の `faceIDPermission`)、写真(`expo-image-picker` の `photosPermission`)を日本語で設定済み。カメラ・マイクは無効
-- [ ] 暗号化に関する輸出コンプライアンス: AES-256-GCM を自前実装(`@noble/ciphers`)で使用。App Store Connect の質問に回答する。免除条件の該当可否は申請時に公式の案内で判断し、必要なら `ITSAppUsesNonExemptEncryption` の設定を検討する
+- [x] 暗号化に関する輸出コンプライアンス: `ITSAppUsesNonExemptEncryption` を `false` に設定済み(根拠は 3.3)
 - [ ] Privacy Manifest(`PrivacyInfo.xcprivacy`): Expo SDK 54 の各ライブラリが同梱するものを使用。EAS ビルド後に Required Reason API の警告が出ていないか確認
+
+### 3.3 暗号化の輸出コンプライアンス
+
+結論: `ios.infoPlist.ITSAppUsesNonExemptEncryption` を `false` にし、**フランスを配信地域に含めない**。
+想定する配信地域は日本とアジアの一部。
+
+本アプリの暗号化の実態:
+
+- 日記の本文・下書きを端末内に保存する際に AES-256-GCM で暗号化する(`utils/diary-encryption.ts`)。実装は OS の暗号 API ではなく JS ライブラリ `@noble/ciphers`
+- AES-256-GCM は国際標準化されたアルゴリズムであり、独自・非公開のアルゴリズムではない
+- 通信には独自の暗号化を使わない(外部サーバーとの通信機能なし)
+
+根拠(2026-10 時点で確認):
+
+| 公式ドキュメント | 内容 |
+| ---------------- | ---- |
+| [Complying with encryption export regulations](https://developer.apple.com/documentation/security/complying-with-encryption-export-regulations) | 暗号化を使わない、または輸出コンプライアンス書類の提出が免除される暗号化のみを使う場合は `NO`、それ以外は `YES` |
+| [Export compliance documentation for encryption](https://developer.apple.com/help/app-store-connect/reference/app-information/export-compliance-documentation-for-encryption) | 「OS が提供しない業界標準のアルゴリズム」は、**フランスで配信する場合のみ**フランスの暗号申告書の提出が必要。独自アルゴリズムの場合は米国 CCATS も必要 |
+| [Overview of export compliance](https://developer.apple.com/help/app-store-connect/manage-app-information/overview-of-export-compliance) | フランスで主に規制されるのは Secure Storage / Secure Communications / Security Anti-Virus。日記の暗号化保存は Secure Storage に該当しうる |
+| [15 CFR 740.17(e)(3)](https://www.ecfr.gov/current/title-15/part-740/section-740.17) | 米国の年次の自己分類報告書(毎年 2 月 1 日期限)の対象は、マスマーケットの暗号部品・「executable software」(既存のハードウェア部品から取り出したソフトウェア)、およびマスマーケットに該当しない品目。一般消費者向けのアプリ単体はこれに当たらないため、報告書は不要と判断 |
+
+本アプリは「OS が提供しない業界標準のアルゴリズム」の区分に当たる。フランスで配信しなければ提出書類が無いため、`false`(書類の提出が免除される暗号化のみ)とする。
+
+運用上の注意:
+
+- [ ] App Store Connect の「価格および配信状況」で、配信地域からフランスを外す
+- フランスで配信する場合は、`true` に変更し、ANSSI への暗号申告書を App Store Connect にアップロードする。承認後に発行されるコードを `ios.infoPlist.ITSEncryptionExportComplianceCode` に設定する
+- 暗号化の実装を変更した場合(通信の暗号化の追加、独自アルゴリズムの採用など)は、本節の判断を見直す
+- 本判断は公式ドキュメントの記載に基づくもので、法律の専門家による確認は受けていない
 
 ## 4. コンテンツレーティング(年齢制限)
 

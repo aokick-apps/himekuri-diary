@@ -61,9 +61,9 @@ Xcode Archive などで作成した `.ipa` を Mac の Transporter アプリで 
 ## 4. TestFlight で配布する
 
 1. App Store Connect の対象アプリの TestFlight タブで、処理が完了したビルドを選ぶ
-2. 輸出コンプライアンスの質問に答える
-   - 本アプリは暗号化を端末内の日記データ保護(AES-256-GCM)に利用している。通信には独自の暗号化を使っていない
-   - 質問の最終的な回答は Apple の最新の定義に従ってオーナーが判断する
+2. 輸出コンプライアンスの質問は表示されない
+   - `app.json` の `ios.infoPlist.ITSAppUsesNonExemptEncryption` を `false` にしているため、回答は省略される
+   - 判断の根拠は [ストア申請チェックリスト](../store-submission-checklist.md) の「3.3 暗号化の輸出コンプライアンス」を参照
 3. 内部テスターを追加する
    - ユーザとアクセスで App Store Connect ユーザを追加し、TestFlight の内部テストグループに加える(最大 100 人)
    - 内部テストは Apple の審査なしで配布できる

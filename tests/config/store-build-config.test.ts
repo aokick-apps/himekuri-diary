@@ -41,6 +41,10 @@ describe('app.json', () => {
     }
   });
 
+  it('輸出コンプライアンス書類が不要な暗号化のみを使う旨をInfo.plistで申告している', () => {
+    expect(expo.ios.infoPlist.ITSAppUsesNonExemptEncryption).toBe(false);
+  });
+
   it('versionがセマンティックバージョン形式である', () => {
     expect(expo.version).toMatch(/^\d+\.\d+\.\d+$/);
   });

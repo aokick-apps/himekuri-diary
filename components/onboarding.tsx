@@ -1,23 +1,95 @@
-import { useCallback, useState } from 'react';
-import { Modal, Pressable, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Animated,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { ONBOARDING_SLIDES } from '@/constants/onboarding-slides';
-import { useThemeColor } from '@/hooks/use-theme-color';
+import { OnboardingIllustration } from '@/components/onboarding-illustrations';
+import { OnboardingColors, type OnboardingColorSet } from '@/constants/onboarding-colors';
+import { ONBOARDING_SLIDES, type OnboardingSlide } from '@/constants/onboarding-slides';
+import { Fonts } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
-const CONTENT_PADDING = 24;
-const HEADER_TOP_OFFSET = 16;
-// ヘッダー(戻る/スキップ)は絶対配置でbodyの上端に近い位置に重なるため、
-// titleAreaの開始位置をヘッダーの下端より下まで離してテキストの重なりを防ぐ
-const TITLE_AREA_TOP_SPACING = 32;
+const SHEET_HORIZONTAL_MARGIN = 20;
+const SWIPE_THRESHOLD = 50;
+const DOT_ANIMATION_MS = 250;
+const GRADIENT_BAND_COUNT = 48;
 
 type OnboardingProps = {
   visible: boolean;
   // スキップ、または最後のスライドで「はじめる」を押したときに呼ばれる。完了フラグの保存は呼び出し側が行う
   onFinish: () => void;
 };
+
+function hexToRgb(hex: string): [number, number, number] {
+  const value = hex.replace('#', '');
+  return [0, 2, 4].map((i) => parseInt(value.slice(i, i + 2), 16)) as [number, number, number];
+}
+
+// 追加依存なしで縦方向のグラデーションを描くため、色を補間した細い帯を積み重ねて近似する
+function buildGradientBands(stops: { color: string; offset: number }[]): string[] {
+  return Array.from({ length: GRADIENT_BAND_COUNT }, (_, i) => {
+    const t = i / (GRADIENT_BAND_COUNT - 1);
+    const upper = stops.findIndex((stop) => stop.offset >= t);
+    const end = stops[Math.max(upper, 1)];
+    const start = stops[Math.max(upper, 1) - 1];
+    const ratio = Math.min(Math.max((t - start.offset) / (end.offset - start.offset), 0), 1);
+    const from = hexToRgb(start.color);
+    const to = hexToRgb(end.color);
+    const [r, g, b] = from.map((channel, k) => Math.round(channel + (to[k] - channel) * ratio));
+    return `rgb(${r},${g},${b})`;
+  });
+}
+
+function GradientBackground({ stops }: { stops: { color: string; offset: number }[] }) {
+  const bands = useMemo(() => buildGradientBands(stops), [stops]);
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      {bands.map((color, index) => (
+        <View key={index} style={{ flex: 1, backgroundColor: color }} />
+      ))}
+    </View>
+  );
+}
+
+function PaginationDot({ active, colors }: { active: boolean; colors: OnboardingColorSet }) {
+  const progress = useRef(new Animated.Value(active ? 1 : 0)).current;
+  const progressValue = useRef(active ? 1 : 0);
+
+  useEffect(() => {
+    // 既に目標値と同じ場合は不要なアニメーション開始(再描画)を避ける
+    if (progressValue.current === (active ? 1 : 0)) return;
+    progressValue.current = active ? 1 : 0;
+    Animated.timing(progress, {
+      toValue: active ? 1 : 0,
+      duration: DOT_ANIMATION_MS,
+      useNativeDriver: false,
+    }).start();
+  }, [active, progress]);
+
+  return (
+    <Animated.View
+      style={[
+        styles.dot,
+        {
+          width: progress.interpolate({ inputRange: [0, 1], outputRange: [8, 20] }),
+          backgroundColor: progress.interpolate({
+            inputRange: [0, 1],
+            outputRange: [colors.dotInactive, colors.dotActive],
+          }),
+        },
+      ]}
+    />
+  );
+}
 
 /**
  * アプリ初回起動時にのみ表示するオンボーディング画面。
@@ -27,15 +99,22 @@ export function Onboarding({ visible, onFinish }: OnboardingProps) {
   const [stepIndex, setStepIndex] = useState(0);
   // translucentなModalはシステムバーの背後まで描画されるため、Modal外でinsetsを取得して加算する
   const insets = useSafeAreaInsets();
-  const tintColor = useThemeColor({}, 'tint');
-  const iconColor = useThemeColor({}, 'icon');
-  const backgroundColor = useThemeColor({}, 'background');
+  const { width: windowWidth } = useWindowDimensions();
+  const colors = OnboardingColors[useColorScheme() === 'dark' ? 'dark' : 'light'];
 
-  const isLastStep = stepIndex === ONBOARDING_SLIDES.length - 1;
-  const currentSlide = ONBOARDING_SLIDES[stepIndex];
+  const pageWidth = windowWidth - SHEET_HORIZONTAL_MARGIN * 2;
+  const lastIndex = ONBOARDING_SLIDES.length - 1;
+  const isLastStep = stepIndex === lastIndex;
 
-  const handleBack = useCallback(() => {
-    setStepIndex((current) => Math.max(current - 1, 0));
+  const listRef = useRef<{
+    scrollToIndex: (params: { index: number; animated: boolean }) => void;
+  } | null>(null);
+  const scrollX = useRef(new Animated.Value(0)).current;
+  const dragStartOffset = useRef(0);
+
+  const goTo = useCallback((index: number, animated = true) => {
+    setStepIndex(index);
+    listRef.current?.scrollToIndex({ index, animated });
   }, []);
 
   const handleNext = useCallback(() => {
@@ -43,17 +122,48 @@ export function Onboarding({ visible, onFinish }: OnboardingProps) {
       onFinish();
       return;
     }
-    setStepIndex((current) => current + 1);
-  }, [isLastStep, onFinish]);
+    goTo(stepIndex + 1);
+  }, [goTo, isLastStep, onFinish, stepIndex]);
 
-  const handleSelectStep = useCallback((index: number) => {
-    setStepIndex(index);
+  const handleScrollBeginDrag = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    dragStartOffset.current = event.nativeEvent.contentOffset.x;
   }, []);
+
+  // 50pt以上動かした場合のみ前後のスライドへ移動し、足りなければ元の位置へ戻す
+  const handleScrollEndDrag = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const startIndex = Math.round(dragStartOffset.current / pageWidth);
+      const delta = event.nativeEvent.contentOffset.x - dragStartOffset.current;
+      let target = startIndex;
+      if (delta >= SWIPE_THRESHOLD) target = Math.min(startIndex + 1, lastIndex);
+      else if (delta <= -SWIPE_THRESHOLD) target = Math.max(startIndex - 1, 0);
+      goTo(target);
+    },
+    [goTo, lastIndex, pageWidth],
+  );
 
   // 再表示時に前回の続きのスライドから始まらないようリセットする
   const handleDismiss = useCallback(() => {
-    setStepIndex(0);
-  }, []);
+    goTo(0, false);
+  }, [goTo]);
+
+  const illustrationTranslateX = scrollX.interpolate({
+    inputRange: [0, Math.max(lastIndex * pageWidth, 1)],
+    outputRange: [0, -lastIndex * windowWidth],
+    extrapolate: 'clamp',
+  });
+
+  const renderSlide = useCallback(
+    ({ item }: { item: OnboardingSlide }) => (
+      <View style={[styles.slide, { width: pageWidth }]}>
+        <Text style={[styles.slideTitle, { color: colors.slideTitle }]}>{item.title}</Text>
+        <Text style={[styles.slideDescription, { color: colors.slideDescription }]}>
+          {item.description}
+        </Text>
+      </View>
+    ),
+    [colors, pageWidth],
+  );
 
   return (
     <Modal
@@ -64,84 +174,120 @@ export function Onboarding({ visible, onFinish }: OnboardingProps) {
       statusBarTranslucent
       navigationBarTranslucent
     >
-      <ThemedView
-        style={[
-          styles.container,
-          {
-            paddingTop: CONTENT_PADDING + insets.top,
-            paddingBottom: CONTENT_PADDING + insets.bottom,
-          },
-        ]}
+      <View
+        style={[styles.container, { backgroundColor: colors.background, paddingTop: insets.top }]}
         testID="onboarding-container"
       >
+        {colors.backgroundGradient ? (
+          <GradientBackground stops={colors.backgroundGradient} />
+        ) : null}
+
+        <View style={styles.titleBlock}>
+          <Text style={[styles.appTitle, { color: colors.title }]}>ひめくり日記</Text>
+          <Text style={[styles.appSubtitle, { color: colors.subtitle }]}>毎日をひとことで残す</Text>
+        </View>
+
         <View
-          style={[styles.header, { top: HEADER_TOP_OFFSET + insets.top }]}
-          testID="onboarding-header"
+          style={styles.illustrationArea}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
         >
-          {stepIndex > 0 ? (
-            <Pressable
-              onPress={handleBack}
-              accessibilityRole="button"
-              accessibilityLabel="前のスライドに戻る"
-              hitSlop={8}
-            >
-              <ThemedText style={[styles.headerActionText, { color: iconColor }]}>戻る</ThemedText>
-            </Pressable>
-          ) : null}
+          <Animated.View
+            style={[
+              styles.illustrationRow,
+              { width: windowWidth * ONBOARDING_SLIDES.length },
+              { transform: [{ translateX: illustrationTranslateX }] },
+            ]}
+          >
+            {ONBOARDING_SLIDES.map((slide) => (
+              <View key={slide.key} style={[styles.illustrationPage, { width: windowWidth }]}>
+                <OnboardingIllustration slideKey={slide.key} colors={colors.illustration} />
+              </View>
+            ))}
+          </Animated.View>
+        </View>
+
+        <View
+          style={[
+            styles.sheet,
+            {
+              backgroundColor: colors.sheet,
+              paddingBottom: insets.bottom,
+              boxShadow: [{ offsetX: 0, offsetY: -12, blurRadius: 32, color: colors.sheetShadow }],
+            },
+          ]}
+          testID="onboarding-sheet"
+        >
+          <Animated.FlatList
+            ref={listRef as never}
+            testID="onboarding-slides"
+            data={ONBOARDING_SLIDES}
+            keyExtractor={(slide) => slide.key}
+            renderItem={renderSlide}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            getItemLayout={(_, index) => ({
+              length: pageWidth,
+              offset: pageWidth * index,
+              index,
+            })}
+            onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], {
+              useNativeDriver: true,
+            })}
+            scrollEventThrottle={16}
+            onScrollBeginDrag={handleScrollBeginDrag}
+            onScrollEndDrag={handleScrollEndDrag}
+            style={styles.slideList}
+          />
+
+          <View style={styles.pagination}>
+            {ONBOARDING_SLIDES.map((slide, index) => (
+              <Pressable
+                key={slide.key}
+                style={styles.dotButton}
+                onPress={() => goTo(index)}
+                accessibilityRole="button"
+                accessibilityLabel={`${index + 1}枚目のスライドへ移動`}
+                accessibilityState={{ selected: index === stepIndex }}
+              >
+                <PaginationDot active={index === stepIndex} colors={colors} />
+              </Pressable>
+            ))}
+          </View>
+
           <Pressable
-            style={styles.skipButton}
+            style={({ pressed }) => [
+              styles.primaryButton,
+              { backgroundColor: pressed ? colors.primaryButtonPressed : colors.primaryButton },
+            ]}
+            onPress={handleNext}
+            accessibilityRole="button"
+          >
+            <Text style={[styles.primaryButtonText, { color: colors.primaryButtonText }]}>
+              {isLastStep ? 'はじめる' : '次へ'}
+            </Text>
+          </Pressable>
+
+          {/* 最後のスライドでも位置がずれないよう、非表示にしても領域は残す */}
+          <Pressable
+            style={({ pressed }) => [
+              styles.skipButton,
+              { opacity: isLastStep ? 0 : 1 },
+              pressed ? { backgroundColor: colors.pressedSurface } : null,
+            ]}
             onPress={onFinish}
+            disabled={isLastStep}
             accessibilityRole="button"
             accessibilityLabel="オンボーディングをスキップ"
-            hitSlop={8}
+            accessibilityElementsHidden={isLastStep}
+            importantForAccessibility={isLastStep ? 'no-hide-descendants' : 'auto'}
+            testID="onboarding-skip"
           >
-            <ThemedText style={[styles.skipText, { color: iconColor }]}>スキップ</ThemedText>
+            <Text style={[styles.skipText, { color: colors.skip }]}>スキップ</Text>
           </Pressable>
         </View>
-
-        <View style={styles.body}>
-          {/* 本文の行数がスライドごとに異なっても、タイトルの表示位置が上下しないよう
-              タイトル用の領域を固定高さにして本文とは独立に中央揃えする */}
-          <View style={styles.titleArea}>
-            <ThemedText type="title" style={styles.title}>
-              {currentSlide.title}
-            </ThemedText>
-          </View>
-          <View style={styles.descriptionArea}>
-            <ThemedText style={styles.description}>{currentSlide.description}</ThemedText>
-          </View>
-        </View>
-
-        <View style={styles.pagination}>
-          {ONBOARDING_SLIDES.map((slide, index) => (
-            <Pressable
-              key={slide.key}
-              style={styles.dotButton}
-              onPress={() => handleSelectStep(index)}
-              accessibilityRole="button"
-              accessibilityLabel={`${index + 1}枚目のスライドへ移動`}
-              accessibilityState={{ selected: index === stepIndex }}
-            >
-              <View
-                style={[
-                  styles.dot,
-                  { backgroundColor: index === stepIndex ? tintColor : iconColor },
-                ]}
-              />
-            </Pressable>
-          ))}
-        </View>
-
-        <Pressable
-          style={[styles.nextButton, { backgroundColor: tintColor }]}
-          onPress={handleNext}
-          accessibilityRole="button"
-        >
-          <ThemedText style={[styles.nextButtonText, { color: backgroundColor }]}>
-            {isLastStep ? 'はじめる' : '次へ'}
-          </ThemedText>
-        </Pressable>
-      </ThemedView>
+      </View>
     </Modal>
   );
 }
@@ -149,74 +295,106 @@ export function Onboarding({ visible, onFinish }: OnboardingProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingHorizontal: CONTENT_PADDING,
-    justifyContent: 'flex-end',
   },
-  header: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    zIndex: 1,
-    elevation: 1,
+  titleBlock: {
+    alignItems: 'center',
+    marginTop: 15,
+  },
+  appTitle: {
+    fontFamily: Fonts.sans,
+    fontSize: 30,
+    fontWeight: '700',
+    letterSpacing: 1.8,
+    lineHeight: 36,
+  },
+  appSubtitle: {
+    fontFamily: Fonts.sans,
+    fontSize: 12,
+    fontWeight: '500',
+    letterSpacing: 2.4,
+    marginTop: 4,
+  },
+  illustrationArea: {
+    flex: 1,
+    marginTop: 20,
+    // イラストの下端をシートの裏へ潜り込ませるため、はみ出し分を切り取らない
+    overflow: 'visible',
+  },
+  illustrationRow: {
+    flex: 1,
     flexDirection: 'row',
-    justifyContent: 'space-between',
+  },
+  illustrationPage: {
     alignItems: 'center',
   },
-  headerActionText: {
-    fontSize: 16,
+  sheet: {
+    marginHorizontal: SHEET_HORIZONTAL_MARGIN,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    alignItems: 'center',
   },
-  skipButton: {
-    marginLeft: 'auto',
+  slideList: {
+    flexGrow: 0,
+    alignSelf: 'stretch',
   },
-  skipText: {
-    fontSize: 16,
+  slide: {
+    minHeight: 164,
+    paddingTop: 30,
+    paddingHorizontal: 40,
+    paddingBottom: 5,
   },
-  body: {
-    flex: 1,
-    justifyContent: 'center',
-    gap: 16,
+  slideTitle: {
+    fontFamily: Fonts.sans,
+    fontSize: 20,
+    fontWeight: '700',
+    lineHeight: 28,
+    marginBottom: 10,
   },
-  titleArea: {
-    minHeight: 72,
-    paddingTop: TITLE_AREA_TOP_SPACING,
-    justifyContent: 'center',
-  },
-  title: {
-    textAlign: 'center',
-  },
-  descriptionArea: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  description: {
-    textAlign: 'center',
-    fontSize: 16,
+  slideDescription: {
+    fontFamily: Fonts.sans,
+    fontSize: 14,
     lineHeight: 24,
   },
   pagination: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 8,
-    marginBottom: 24,
+    marginBottom: 10,
   },
   dotButton: {
-    width: 32,
-    height: 32,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
   dot: {
-    width: 8,
     height: 8,
     borderRadius: 4,
   },
-  nextButton: {
-    paddingVertical: 14,
-    borderRadius: 8,
+  primaryButton: {
+    alignSelf: 'stretch',
+    marginHorizontal: 20,
+    height: 52,
+    borderRadius: 14,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  nextButtonText: {
+  primaryButtonText: {
+    fontFamily: Fonts.sans,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
+    letterSpacing: 1.28,
+  },
+  skipButton: {
+    marginTop: 5,
+    minWidth: 96,
+    minHeight: 44,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  skipText: {
+    fontFamily: Fonts.sans,
+    fontSize: 14,
+    fontWeight: '500',
   },
 });

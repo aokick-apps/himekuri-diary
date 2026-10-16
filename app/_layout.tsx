@@ -1,5 +1,6 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Modal, StyleSheet } from 'react-native';
@@ -14,6 +15,10 @@ import { DiaryReminderProvider } from '@/contexts/diary-reminder-context';
 import { ThemePreferenceProvider, useThemePreference } from '@/contexts/theme-preference-context';
 import { cleanUpUnreferencedDiaryImagesAsync } from '@/utils/diary-image-cleanup';
 import { hasCompletedOnboarding, markOnboardingCompleted } from '@/utils/onboarding-storage';
+
+// 判定・設定の読み込み完了まで起動画面を出したままにし、ホーム画面の一瞬の露出を防ぐ
+SplashScreen.preventAutoHideAsync().catch(() => {});
+SplashScreen.setOptions({ fade: true });
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -44,18 +49,33 @@ function RootLayoutContent() {
   } = useAppLock();
   // AsyncStorageの確認が終わるまでfalseのままにし、2回目以降の起動で一瞬誤表示されるのを防ぐ
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [isOnboardingChecked, setIsOnboardingChecked] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
-    hasCompletedOnboarding().then((completed) => {
-      if (isMounted && !completed) {
-        setShowOnboarding(true);
-      }
-    });
+    hasCompletedOnboarding()
+      .then((completed) => {
+        if (isMounted && !completed) {
+          setShowOnboarding(true);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (isMounted) {
+          setIsOnboardingChecked(true);
+        }
+      });
     return () => {
       isMounted = false;
     };
   }, []);
+
+  // オンボーディング判定とロック設定の両方が確定してから起動画面を消す。失敗時も既定値で進める
+  useEffect(() => {
+    if (isOnboardingChecked && isAppLockReady) {
+      SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [isOnboardingChecked, isAppLockReady]);
 
   // 前回の起動中に片付けきれなかった添付画像を、起動時に一度だけ掃除する
   useEffect(() => {

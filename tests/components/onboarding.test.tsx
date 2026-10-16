@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import React from 'react';
-import { Modal, StyleSheet } from 'react-native';
+import { Dimensions, Modal, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { Onboarding } from '@/components/onboarding';
@@ -203,5 +203,86 @@ describe('Onboarding', () => {
     const keys = ONBOARDING_SLIDES.map((slide) => slide.key);
 
     expect(new Set(keys).size).toBe(keys.length);
+  });
+});
+
+describe('Onboarding のスワイプ操作', () => {
+  const pageWidth = () => Dimensions.get('window').width - 40;
+  const lastIndex = ONBOARDING_SLIDES.length - 1;
+
+  function swipe(startIndex: number, delta: number) {
+    const list = screen.getByTestId('onboarding-slides');
+    const startX = startIndex * pageWidth();
+    fireEvent(list, 'scrollBeginDrag', { nativeEvent: { contentOffset: { x: startX } } });
+    fireEvent(list, 'scrollEndDrag', { nativeEvent: { contentOffset: { x: startX + delta } } });
+  }
+
+  function expectSelected(index: number) {
+    ONBOARDING_SLIDES.forEach((_, i) => {
+      expect(
+        screen.getByLabelText(`${i + 1}枚目のスライドへ移動`).props.accessibilityState,
+      ).toEqual({ selected: i === index });
+    });
+  }
+
+  it('moves to the next slide when dragged forward by exactly 50pt (境界値: 閾値ちょうど)', () => {
+    render(<Onboarding visible={true} onFinish={jest.fn()} />);
+
+    swipe(0, 50);
+
+    expectSelected(1);
+  });
+
+  it('stays on the current slide when dragged forward by 49pt (境界値: 閾値未満)', () => {
+    render(<Onboarding visible={true} onFinish={jest.fn()} />);
+
+    swipe(0, 49);
+
+    expectSelected(0);
+  });
+
+  it('moves to the previous slide when dragged backward by exactly 50pt (境界値: 逆方向の閾値)', () => {
+    render(<Onboarding visible={true} onFinish={jest.fn()} />);
+    fireEvent.press(screen.getByLabelText('2枚目のスライドへ移動'));
+
+    swipe(1, -50);
+
+    expectSelected(0);
+  });
+
+  it('stays on the current slide when dragged backward by 49pt (境界値: 逆方向の閾値未満)', () => {
+    render(<Onboarding visible={true} onFinish={jest.fn()} />);
+    fireEvent.press(screen.getByLabelText('2枚目のスライドへ移動'));
+
+    swipe(1, -49);
+
+    expectSelected(1);
+  });
+
+  it('does not go before the first slide when dragged backward on it (境界値: 先頭)', () => {
+    render(<Onboarding visible={true} onFinish={jest.fn()} />);
+
+    swipe(0, -200);
+
+    expectSelected(0);
+  });
+
+  it('does not go past the last slide nor call onFinish when dragged forward on it (境界値: 末尾)', () => {
+    const onFinish = jest.fn();
+    render(<Onboarding visible={true} onFinish={onFinish} />);
+    fireEvent.press(screen.getByLabelText(`${ONBOARDING_SLIDES.length}枚目のスライドへ移動`));
+
+    swipe(lastIndex, 200);
+
+    expectSelected(lastIndex);
+    expect(onFinish).not.toHaveBeenCalled();
+  });
+
+  it('moves only one slide even when dragged far (境界値: 大きなスワイプ)', () => {
+    render(<Onboarding visible={true} onFinish={jest.fn()} />);
+
+    swipe(0, pageWidth() * 2);
+
+    expectSelected(1);
   });
 });

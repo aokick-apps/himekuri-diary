@@ -136,6 +136,41 @@ describe('RootLayout の起動画面制御', () => {
     await waitFor(() => expect(SplashScreen.hideAsync).toHaveBeenCalled());
   });
 
+  it('does not hide the splash screen while the onboarding flag is still being read', async () => {
+    let resolveRead: (value: string | null) => void = () => {};
+    (AsyncStorage.getItem as jest.Mock).mockImplementationOnce(
+      () => new Promise<string | null>((resolve) => (resolveRead = resolve)),
+    );
+
+    render(<RootLayout />);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(SplashScreen.hideAsync).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveRead(null);
+    });
+    await waitFor(() => expect(SplashScreen.hideAsync).toHaveBeenCalledTimes(1));
+  });
+
+  it('hides the splash screen when onboarding is not yet completed and the onboarding modal is shown', async () => {
+    render(<RootLayout />);
+
+    await waitFor(() => expect(SplashScreen.hideAsync).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByText(ONBOARDING_SLIDES[0].title)).toBeTruthy());
+  });
+
+  it('hides the splash screen exactly once', async () => {
+    render(<RootLayout />);
+
+    await waitFor(() => expect(SplashScreen.hideAsync).toHaveBeenCalled());
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(SplashScreen.hideAsync).toHaveBeenCalledTimes(1);
+  });
+
   it('does not throw when hideAsync rejects', async () => {
     SplashScreen.hideAsync.mockRejectedValueOnce(new Error('hide failed'));
 

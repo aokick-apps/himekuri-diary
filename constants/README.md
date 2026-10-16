@@ -8,6 +8,7 @@
 constants/
   diary-messages.ts      日記の保存関連でユーザーに表示する文言(保存成功トーストなど)の定義
   onboarding-slides.ts   初回起動時のオンボーディングで案内するスライドの定義
+  onboarding-colors.ts   オンボーディング専用のライト/ダーク配色
   settings-menu.ts       設定画面のメニュー項目(法的情報・サポートなど)の定義
   theme.ts               ライト/ダークモードのカラーパレットとフォント設定
 ```

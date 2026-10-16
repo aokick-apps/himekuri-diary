@@ -56,6 +56,13 @@ jest.mock('@/utils/app-lock-authentication', () => ({
   authenticateForAppLockAsync: jest.fn(() => Promise.resolve(true)),
 }));
 
+// ネイティブの起動画面APIはJest環境に存在しないため、呼び出しだけを検証できるようモック化する
+jest.mock('expo-splash-screen', () => ({
+  preventAutoHideAsync: jest.fn(() => Promise.resolve(true)),
+  hideAsync: jest.fn(() => Promise.resolve()),
+  setOptions: jest.fn(),
+}));
+
 // 起動時の添付画像の掃除はネイティブのファイルシステムに依存するため、呼び出されたかだけを検証する
 jest.mock('@/utils/diary-image-cleanup', () => ({
   cleanUpUnreferencedDiaryImagesAsync: jest.fn(() => Promise.resolve()),
@@ -102,6 +109,39 @@ describe('RootLayout の一日日記一覧画面(day-entries/[date])の戻るボ
 
     // アプリロック設定の読み込み完了(遮蔽用オーバーレイの消滅)まで待ってから終える
     await waitFor(() => expect(screen.queryByTestId(APP_LOCK_LOADING_OVERLAY_TEST_ID)).toBeNull());
+  });
+});
+
+describe('RootLayout の起動画面制御', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const SplashScreen = require('expo-splash-screen') as { hideAsync: jest.Mock };
+
+  beforeEach(async () => {
+    await AsyncStorage.clear();
+    SplashScreen.hideAsync.mockClear();
+  });
+
+  it('hides the splash screen once onboarding check and app lock loading have both finished', async () => {
+    render(<RootLayout />);
+
+    await waitFor(() => expect(SplashScreen.hideAsync).toHaveBeenCalled());
+    expect(screen.queryByTestId(APP_LOCK_LOADING_OVERLAY_TEST_ID)).toBeNull();
+  });
+
+  it('still hides the splash screen when reading the onboarding flag rejects', async () => {
+    (AsyncStorage.getItem as jest.Mock).mockRejectedValueOnce(new Error('read failed'));
+
+    render(<RootLayout />);
+
+    await waitFor(() => expect(SplashScreen.hideAsync).toHaveBeenCalled());
+  });
+
+  it('does not throw when hideAsync rejects', async () => {
+    SplashScreen.hideAsync.mockRejectedValueOnce(new Error('hide failed'));
+
+    render(<RootLayout />);
+
+    await waitFor(() => expect(SplashScreen.hideAsync).toHaveBeenCalled());
   });
 });
 

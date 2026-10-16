@@ -20,6 +20,7 @@ components/
   haptic-tab.tsx                  タップ時に触覚フィードバックを伴うタブボタン
   keyboard-done-accessory.tsx     iOSのキーボードの上に「完了」ボタンを表示し、複数行入力欄のキーボードを閉じられるようにするバー
   onboarding.tsx                  初回起動時に表示する使い方説明のオンボーディング画面
+  onboarding-illustrations.tsx    オンボーディングのスライドごとのアプリ画面イラスト(View/Textで描画)
   save-toast.tsx                  保存成功時などに一時的なフィードバックを表示するトースト(スナックバー)
   segmented-option-selector.tsx   選択肢の中から1つだけ選ぶボタン列(設定画面の外観・カレンダー表示レイアウトなど)
   settings/                       設定画面(app/(tabs)/settings.tsx)を構成する各セクション

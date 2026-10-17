@@ -376,8 +376,8 @@ describe('リマインダーセクション(日記を書く習慣化のための
       ]) {
         const button = screen.getByLabelText(label);
         expect(button.props.accessibilityState.disabled).toBe(true);
-        // 操作できないことが見た目でも伝わるよう、半透明化(opacity: 0.4)されていることを確認する
-        expect(StyleSheet.flatten(button.props.style).opacity).toBe(0.4);
+        // 操作できないことが見た目でも伝わるよう、半透明化(opacity: 0.65)されていることを確認する
+        expect(StyleSheet.flatten(button.props.style).opacity).toBe(0.65);
       }
     });
 

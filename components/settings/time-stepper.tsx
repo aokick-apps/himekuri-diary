@@ -6,6 +6,9 @@ import { ThemedView } from '@/components/themed-view';
 import { useStepperAutoRepeat } from '@/hooks/use-stepper-auto-repeat';
 import { useThemeColor } from '@/hooks/use-theme-color';
 
+// 無効時でも−/+と値が読み取れる最低限のコントラストを保つ
+const DISABLED_OPACITY = 0.65;
+
 // 時刻の「時」「分」を1つずつ調整するためのステッパー(−/+ボタン)。
 // 外部ライブラリを追加せずに実装するため、ネイティブのタイムピッカーではなく増減ボタン方式にしている
 export function TimeStepper({
@@ -61,7 +64,10 @@ export function TimeStepper({
         accessibilityRole="button"
         accessibilityLabel={`${label}を減らす`}
         accessibilityState={{ disabled }}
-        style={[styles.button, { borderColor: tintColor, opacity: disabled ? 0.4 : 1 }]}
+        style={[
+          styles.button,
+          { borderColor: tintColor, opacity: disabled ? DISABLED_OPACITY : 1 },
+        ]}
       >
         <ThemedText style={[styles.buttonText, { color: linkColor }]}>−</ThemedText>
       </Pressable>
@@ -69,7 +75,7 @@ export function TimeStepper({
         accessible
         accessibilityLabel={valueLabel}
         accessibilityLiveRegion={Platform.OS === 'android' ? 'polite' : undefined}
-        style={[styles.valueGroup, { opacity: disabled ? 0.4 : 1 }]}
+        style={[styles.valueGroup, { opacity: disabled ? DISABLED_OPACITY : 1 }]}
       >
         <ThemedText
           // 値が変わっても桁の幅が揺れないよう等幅フォントで表示する
@@ -88,7 +94,10 @@ export function TimeStepper({
         accessibilityRole="button"
         accessibilityLabel={`${label}を増やす`}
         accessibilityState={{ disabled }}
-        style={[styles.button, { borderColor: tintColor, opacity: disabled ? 0.4 : 1 }]}
+        style={[
+          styles.button,
+          { borderColor: tintColor, opacity: disabled ? DISABLED_OPACITY : 1 },
+        ]}
       >
         <ThemedText style={[styles.buttonText, { color: linkColor }]}>+</ThemedText>
       </Pressable>

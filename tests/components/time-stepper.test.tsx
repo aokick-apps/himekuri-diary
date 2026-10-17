@@ -33,3 +33,16 @@ describe('TimeStepper', () => {
     },
   );
 });
+
+describe('TimeStepper disabled', () => {
+  it('keeps the minus and plus buttons readable when disabled', () => {
+    render(
+      <TimeStepper label="時" value={21} onDecrease={jest.fn()} onIncrease={jest.fn()} disabled />,
+    );
+
+    for (const name of ['時を減らす', '時を増やす']) {
+      const style = StyleSheet.flatten(screen.getByLabelText(name).props.style);
+      expect(style.opacity).toBeGreaterThanOrEqual(0.6);
+    }
+  });
+});
